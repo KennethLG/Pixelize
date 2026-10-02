@@ -1,11 +1,25 @@
 {
   "name": "pixelize",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Turns fake (AI generated) pixel art into real pixel art: detects the grid size and normalizes the palette",
-  "main": "pixelize.js",
-  "bin": { "pixelize": "pixelize.js" },
+  "type": "module",
+  "description": "Turns fake (AI generated) pixel art into real pixel art: grid detection, palette, editor, spritesheet animation and exports",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && node scripts/postbuild.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc",
+    "cli": "tsx cli/pixelize.ts"
+  },
   "dependencies": {
     "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "tsx": "^4.23.15",
+    "typescript": "5.6",
+    "vite": "^5.4.21",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^2.1.9"
   }
 }
