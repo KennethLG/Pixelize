@@ -1,0 +1,11 @@
+{
+  "name": "pixelize",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Turns fake (AI generated) pixel art into real pixel art: detects the grid size and normalizes the palette",
+  "main": "pixelize.js",
+  "bin": { "pixelize": "pixelize.js" },
+  "dependencies": {
+    "sharp": "^0.33.5"
+  }
+}
