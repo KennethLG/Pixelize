@@ -5,6 +5,7 @@ import { hex, hexToRgb, keyAt, type RGB, type RGBA } from '../core/color';
 import { app, canRedo, canUndo, commitEdits, onResult, onSource, pushUndo, redo, schedule, undo } from './app';
 import { $, cssVar, field, isChecked, num } from './dom';
 import { saveSettings } from './settings';
+import { currentStep, onStep } from './steps';
 
 type Tool = 'pan' | 'pencil' | 'eraser' | 'fill' | 'picker' | 'bg';
 
@@ -76,15 +77,18 @@ export function draw(): void {
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(app.resultCanvas, ox, oy, W, H);
 
-  if (isChecked('compare') && app.source) {
+  if (isChecked('compare') && app.source && app.base) {
     const sx = (view.cw * num('split')) / 100;
+    // the part of the original that the (maybe cropped) result covers
+    const { xs, ys } = app.base.grid, c = app.base.crop;
+    const x0 = xs[c.x], y0 = ys[c.y], x1 = xs[c.x + c.w], y1 = ys[c.y + c.h];
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, sx, view.ch);
     ctx.clip();
     ctx.clearRect(0, 0, sx, view.ch);
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(app.source.img, ox, oy, W, H);
+    ctx.drawImage(app.source.img, x0, y0, x1 - x0, y1 - y0, ox, oy, W, H);
     ctx.restore();
     ctx.fillStyle = cssVar('--accent');
     ctx.fillRect(sx - 1, 0, 2, view.ch);
@@ -220,10 +224,14 @@ function onPointerDown(e: PointerEvent): void {
     const i = (p.y * res.width + p.x) * 4;
     if (res.pixels[i + 3]) { setDrawColor([res.pixels[i], res.pixels[i + 1], res.pixels[i + 2]]); setTool('pencil'); }
   } else if (tool === 'bg') {
-    const i = (p.y * base.width + p.x) * 4;
+    // preBg is the uncropped image, so the pick is stored in its coordinates
+    const x = p.x + base.crop.x, y = p.y + base.crop.y;
+    const i = (y * base.fullW + x) * 4;
     if (base.preBg[i + 3]) {
-      app.bgPick = { key: keyAt(base.preBg, i), x: p.x, y: p.y };
+      app.bgPick = { key: keyAt(base.preBg, i), x, y };
       field('removeBg').checked = true;
+      field('removeBg').dispatchEvent(new Event('change'));
+      setTool('pan');
       saveSettings();
       schedule();
     }
@@ -260,8 +268,11 @@ function onKeyDown(e: KeyboardEvent): void {
   if (mod && k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   if (mod && k === 'y') { e.preventDefault(); redo(); return; }
   if (mod || e.altKey || target.closest?.('.frame')) return;
+  // the result view only shows on these steps, and the tools only on "Touch up"
+  const step = currentStep();
+  if (!['grid', 'colors', 'clean', 'edit', 'export'].includes(step)) return;
   const tools: Record<string, Tool> = { h: 'pan', b: 'pencil', e: 'eraser', g: 'fill', i: 'picker' };
-  if (tools[k]) setTool(tools[k]);
+  if (tools[k]) { if (step === 'edit') setTool(tools[k]); }
   else if (k === '+' || k === '=') zoomStep(1, null);
   else if (k === '-') zoomStep(-1, null);
   else if (k === '0') { fittedDims = ''; draw(); }
@@ -289,7 +300,11 @@ export function initEditor(): void {
     zoomStep(e.deltaY < 0 ? 1 : -1, [e.clientX - r.left, e.clientY - r.top]);
   }, { passive: false });
 
-  document.querySelectorAll<HTMLElement>('.tool').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool as Tool)));
+  document.querySelectorAll<HTMLElement>('.tool').forEach((b) => b.addEventListener('click', () => {
+    const t = b.dataset.tool as Tool;
+    // the background picker is a lone toggle in its step
+    setTool(t === 'bg' && tool === 'bg' ? 'pan' : t);
+  }));
   field('drawColor').addEventListener('input', () => {
     setDrawColor(hexToRgb(field('drawColor').value));
     if (tool === 'pan' || tool === 'picker' || tool === 'bg') setTool('pencil');
@@ -309,6 +324,12 @@ export function initEditor(): void {
     if (e.key === ' ' && spaceHeld) { spaceHeld = false; stage().classList.toggle('pan', tool === 'pan'); draw(); }
   });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+
+  // drawing tools belong to "Touch up" and the background picker to its step
+  onStep((s) => {
+    const allowed = tool === 'pan' || (s === 'edit' && tool !== 'bg') || (s === 'clean' && tool === 'bg');
+    if (!allowed) setTool('pan');
+  });
 
   setTool('pan');
   setDrawColor(drawColor);

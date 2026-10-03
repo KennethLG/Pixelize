@@ -18,6 +18,7 @@ const HELP = `Usage: npm run cli -- <input> [options]
   --cell <px>             skip detection: cell size in source px (can be fractional)
   --size <WxH>            skip detection: exact output size, e.g. 64x64
   --remove-bg             make the background (the most common edge color) transparent
+  --trim [pad]            crop the empty space around the art, keeping pad px (default 0)
   --clean                 remove stray noise pixels
   --alpha <0-255>         cells with alpha below this become transparent (default 128)
   --preview <n>           also write a preview scaled n times (default 8, 0 = off)
@@ -32,6 +33,7 @@ interface Args {
   cell?: number;
   size?: [number, number];
   removeBg: boolean;
+  trim: number | null;
   clean: boolean;
   alpha: number;
   preview: number;
@@ -40,7 +42,7 @@ interface Args {
 }
 
 function parseArgs(argv: string[]): Args {
-  const a: Args = { tolerance: 10, removeBg: false, clean: false, alpha: 128, preview: 8, palette: false, help: false };
+  const a: Args = { tolerance: 10, removeBg: false, trim: null, clean: false, alpha: 128, preview: 8, palette: false, help: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const next = () => {
@@ -59,6 +61,7 @@ function parseArgs(argv: string[]): Args {
       a.size = [parseInt(m[1], 10), parseInt(m[2], 10)];
     }
     else if (arg === '--remove-bg') a.removeBg = true;
+    else if (arg === '--trim') a.trim = /^\d+$/.test(argv[i + 1] ?? '') ? parseInt(argv[++i], 10) : 0;
     else if (arg === '--clean') a.clean = true;
     else if (arg === '--alpha') a.alpha = parseInt(next(), 10);
     else if (arg === '--preview') a.preview = parseInt(next(), 10);
@@ -103,6 +106,7 @@ async function main(): Promise<void> {
   if (a.cell) o.size = { ...o.size, mode: 'manual', cellX: a.cell, cellY: a.cell };
   if (a.size) o.size = { ...o.size, mode: 'exact', fw: a.size[0], fh: a.size[1] };
   o.bg.on = a.removeBg;
+  if (a.trim !== null) o.crop = { ...o.crop, mode: 'trim', pad: a.trim };
   o.clean.on = a.clean;
 
   const r = processImage(src, {}, o);

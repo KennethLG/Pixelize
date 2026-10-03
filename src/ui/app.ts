@@ -6,6 +6,7 @@ import type { RGB, RGBA } from '../core/color';
 import type { ColorMap } from '../core/palette';
 import type { BgMode } from '../core/background';
 import type { GridMode } from '../core/grid';
+import type { CropMode } from '../core/crop';
 import type { BgPick, PaletteMode, ProcessOptions, ProcessResult } from '../core/pipeline';
 import { dropSource, processAsync, type WorkSource } from './processing';
 import { int, isChecked, num, radio, setStatus } from './dom';
@@ -88,6 +89,10 @@ export function collectOpts(): ProcessOptions {
     palette: { mode: radio<PaletteMode>('palMode'), tol: num('tol'), count: int('colors'), imported: app.imported, locks: app.locks, maps: app.colorMaps },
     clean: { on: isChecked('clean'), strength: num('cleanStr') },
     bg: { on: isChecked('removeBg'), mode: radio<BgMode>('bgMode'), tol: num('bgTol'), pick: app.bgPick },
+    crop: {
+      mode: radio<CropMode>('cropMode'), pad: int('cropPad') || 0,
+      left: int('cropL') || 0, top: int('cropT') || 0, right: int('cropR') || 0, bottom: int('cropB') || 0,
+    },
   };
 }
 

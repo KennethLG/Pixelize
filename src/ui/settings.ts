@@ -10,8 +10,8 @@ import type { RGB } from '../core/color';
 
 const PERSIST_IDS = ['cellX', 'cellY', 'square', 'offX', 'offY', 'snap', 'fw', 'fh', 'tol', 'colors', 'clean', 'cleanStr',
   'alpha', 'removeBg', 'bgTol', 'showGrid', 'scale', 'pixGrid', 'animOn', 'cols', 'rows', 'minGap', 'fps', 'onion',
-  'repeatHolds', 'sheetCols', 'sheetPad', 'gifScale', 'batchPalette'];
-const PERSIST_RADIOS = ['sizeMode', 'palMode', 'bgMode', 'splitMode', 'align', 'dir', 'endMode'];
+  'repeatHolds', 'sheetCols', 'sheetPad', 'gifScale', 'batchPalette', 'cropPad', 'cropL', 'cropT', 'cropR', 'cropB'];
+const PERSIST_RADIOS = ['sizeMode', 'palMode', 'bgMode', 'cropMode', 'splitMode', 'align', 'dir', 'endMode', 'ghost'];
 const STORE_KEY = 'pixelize.settings.v1';
 
 interface Saved {

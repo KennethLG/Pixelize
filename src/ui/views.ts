@@ -12,6 +12,10 @@ export function renderSource(): void {
   canvas.width = src.w;
   canvas.height = src.h;
   canvas.parentElement!.style.aspectRatio = `${src.w} / ${src.h}`;
+  // on the grid step the result matches the original's shape, and wide images stack
+  const views = document.querySelector<HTMLElement>('.views')!;
+  views.style.setProperty('--src-ar', `${src.w} / ${src.h}`);
+  views.classList.toggle('wide', src.w > src.h * 1.25);
   const ctx = canvas.getContext('2d')!;
   ctx.drawImage(src.img, 0, 0);
   if (!isChecked('showGrid') || !app.base) return;
@@ -49,12 +53,15 @@ export function renderStats(): void {
   $('resTag').textContent = g.cell ? `cells ${g.min}–${g.max} px` : '';
   $('gridAutoInfo').textContent = radio('sizeMode') === 'auto' && g.cell
     ? `Detected ${g.cell.x.toFixed(2)} px per pixel (${level} confidence).`
-    : 'Detects the size of the simulated pixels on its own.';
+    : 'Detects the size of the fake pixels on its own.';
   const bgHex = base.bgKey === null ? null : hex(rgbOfKey(base.bgKey));
   $('bgSwatch').style.background = bgHex || '';
   $('bgHex').textContent = bgHex ? `${bgHex} ${base.bgAuto ? '(auto)' : '(picked)'}` : '–';
   field('bgAuto').disabled = base.bgAuto;
-  $('bgModeRow').style.opacity = isChecked('removeBg') ? '' : '0.55';
+  const cropped = base.width !== base.fullW || base.height !== base.fullH;
+  $('cropInfo').textContent = cropped
+    ? `${base.fullW}×${base.fullH} → ${base.width}×${base.height} px`
+    : `${base.width}×${base.height} px${radio('cropMode') === 'trim' ? ', nothing to trim' : ''}`;
 }
 
 export function initViews(): void {

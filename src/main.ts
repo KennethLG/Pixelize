@@ -1,5 +1,6 @@
 // Entry point. Order matters: settings are restored before the controls sync,
-// and result listeners run in registration order (palette, editor, animation).
+// result listeners run in registration order (palette, editor, animation), and
+// the steps start last so every module already listens to step changes.
 
 import './styles.css';
 import { app, schedule } from './ui/app';
@@ -13,6 +14,7 @@ import { initAnim, animState } from './ui/anim';
 import { initDownloads } from './ui/downloads';
 import { initBatch, runBatch } from './ui/batch';
 import { initInput, loadSample, sampleCanvas } from './ui/input';
+import { goTo, initSteps } from './ui/steps';
 
 startWorker();
 initSettings();
@@ -24,7 +26,7 @@ initAnim();
 initDownloads();
 initBatch();
 initInput();
-loadSample();
+initSteps();
 
 // Handle for inspecting the page from the browser console.
-Object.assign(window, { pixelize: { app, schedule, isBusy, usingWorker, animState, runBatch, sampleCanvas } });
+Object.assign(window, { pixelize: { app, schedule, isBusy, usingWorker, animState, runBatch, sampleCanvas, loadSample, goTo } });

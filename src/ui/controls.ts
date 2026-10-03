@@ -32,8 +32,12 @@ export function syncModes(): void {
   $('palHint').hidden = pal === 'imported';
   $('palHint').textContent = pal === 'fixed'
     ? 'Groups every shade into exactly this many colors.'
-    : 'Higher tolerance merges more similar shades and leaves fewer colors.';
+    : 'Move it right to merge more shades and get fewer colors.';
   $('cleanRow').hidden = !isChecked('clean');
+  $('bgBox').classList.toggle('dim', !isChecked('removeBg'));
+  const crop = radio('cropMode');
+  $('trimBox').hidden = crop !== 'trim';
+  $('manualCropBox').hidden = crop !== 'manual';
   // the offset only places lines when they are not snapping to edges
   for (const id of ['offX', 'offXr', 'offY', 'offYr']) field(id).disabled = isChecked('snap');
   for (const [out, src] of [['tolOut', 'tol'], ['cleanOut', 'cleanStr'], ['alphaOut', 'alpha'], ['bgTolOut', 'bgTol'], ['fpsOut', 'fps']]) {
@@ -48,7 +52,7 @@ export function syncSplit(): void {
   $('autoRows').hidden = grid;
   $('splitHint').textContent = grid
     ? 'Splits the result into equal parts, left to right and top to bottom.'
-    : 'Finds each frame by the empty space (background color) around it.';
+    : 'Finds each frame by the empty space around it.';
 }
 
 export function syncAll(): void {
@@ -80,8 +84,8 @@ export function initControls(): void {
     field(n).addEventListener('input', () => { field(r).value = field(n).value; syncPairs(); schedule(); });
     field(r).addEventListener('input', () => { field(n).value = field(r).value; syncPairs(); schedule(); });
   }
-  onAll('input[name="sizeMode"], input[name="palMode"], input[name="bgMode"]', 'change', () => { syncModes(); schedule(); });
-  for (const id of ['fw', 'fh', 'colors', 'alpha', 'tol', 'cleanStr', 'bgTol']) field(id).addEventListener('input', () => { syncModes(); schedule(); });
+  onAll('input[name="sizeMode"], input[name="palMode"], input[name="bgMode"], input[name="cropMode"]', 'change', () => { syncModes(); schedule(); });
+  for (const id of ['fw', 'fh', 'colors', 'alpha', 'tol', 'cleanStr', 'bgTol', 'cropPad', 'cropL', 'cropT', 'cropR', 'cropB']) field(id).addEventListener('input', () => { syncModes(); schedule(); });
   for (const id of ['square', 'snap', 'clean', 'removeBg']) field(id).addEventListener('change', () => { syncAll(); schedule(); });
   $('toManual').addEventListener('click', toManual);
   $('warnManual').addEventListener('click', toManual);

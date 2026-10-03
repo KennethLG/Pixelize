@@ -1,6 +1,6 @@
 // The whole conversion: grid → one color per cell → palette → color edits →
-// cleanup → background. Pure, so the page, its worker, the CLI and the tests
-// all run exactly this.
+// cleanup → background → crop. Pure, so the page, its worker, the CLI and the
+// tests all run exactly this.
 
 import { dist2, keyAt, labOf, labOfKey, type RGB } from './color';
 import { analyzeGrid, type Grid, type GridCache, type GridSettings, type SourceImage } from './grid';
@@ -8,6 +8,8 @@ import { sampleCells } from './cells';
 import { applyColorMaps, applyPalette, autoPalette, collectColors, kmeansPalette, pinnedEntries, type ColorMap, type PaletteEntry } from './palette';
 import { cleanStray } from './cleanup';
 import { borderColor, removeBackground, type BgMode } from './background';
+import { cropPixels, cropRect, type CropSettings } from './crop';
+import type { Rect } from './frames';
 
 export type PaletteMode = 'auto' | 'fixed' | 'imported';
 
@@ -30,14 +32,19 @@ export interface ProcessOptions {
   };
   clean: { on: boolean; strength: number };
   bg: { on: boolean; mode: BgMode; tol: number; pick: BgPick | null };
+  crop: CropSettings;
 }
 
 export interface ProcessResult {
   width: number;
   height: number;
   pixels: Uint8ClampedArray;
-  /** The pixels before background removal (for picking a background color). */
+  /** The pixels before background removal and crop (for picking a background color), fullW × fullH. */
   preBg: Uint8ClampedArray;
+  fullW: number;
+  fullH: number;
+  /** The part of the fullW × fullH image kept in `pixels`. */
+  crop: Rect;
   bgKey: number | null;
   /** The background color plus every color within the background tolerance. */
   bgKeys: number[];
@@ -53,6 +60,7 @@ export function defaultOptions(): ProcessOptions {
     palette: { mode: 'auto', tol: 10, count: 16, imported: [], locks: [], maps: [] },
     clean: { on: false, strength: 15 },
     bg: { on: false, mode: 'edge', tol: 6, pick: null },
+    crop: { mode: 'off', pad: 0, left: 0, top: 0, right: 0, bottom: 0 },
   };
 }
 
@@ -88,5 +96,9 @@ export function processImage(src: SourceImage, cache: GridCache, o: ProcessOptio
   }
   if (o.bg.on && bgKey !== null) removeBackground(px, w, h, new Set(bgKeys), o.bg.mode, pick);
 
-  return { width: w, height: h, pixels: px, preBg, bgKey, bgKeys, bgAuto: !pick, sampled: colors.length, grid };
+  // background colors count as empty space even when they were not removed
+  const crop = cropRect(px, w, h, new Set(bgKeys), o.crop);
+  if (crop.w !== w || crop.h !== h) px = cropPixels(px, w, crop);
+
+  return { width: crop.w, height: crop.h, pixels: px, preBg, fullW: w, fullH: h, crop, bgKey, bgKeys, bgAuto: !pick, sampled: colors.length, grid };
 }

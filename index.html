@@ -8,271 +8,360 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
 </head>
-<body>
+<body data-step="image">
 <div class="wrap">
-  <header>
+  <header class="top">
     <h1>Pixelize</h1>
-    <p>Turns fake pixel art (AI images with simulated pixels of uneven size and slightly shifting colors) into real pixel art, then lets you touch it up, fix the palette and build the animation. Everything runs in your browser.</p>
+    <p>Fake AI pixel art in, real pixel art out.</p>
   </header>
 
-  <div class="app">
-    <aside class="controls">
-      <fieldset>
-        <legend>Image</legend>
-        <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose an image">
-          <strong>Drop an image here</strong>
-          <small>or click to choose one · you can also paste it with Ctrl+V</small>
-        </div>
-        <input type="file" id="file" accept="image/*" hidden>
-        <p class="hint" id="srcName"></p>
-      </fieldset>
+  <nav class="steps" aria-label="Steps">
+    <button type="button" class="step" data-step="image"><b>1</b><span>Image</span></button>
+    <button type="button" class="step" data-step="grid"><b>2</b><span>Pixels</span></button>
+    <button type="button" class="step" data-step="colors"><b>3</b><span>Colors</span></button>
+    <button type="button" class="step" data-step="clean"><b>4</b><span>Background &amp; crop</span></button>
+    <button type="button" class="step" data-step="edit"><b>5</b><span>Touch up<small>optional</small></span></button>
+    <button type="button" class="step" data-step="frames"><b>6</b><span>Animation<small>optional</small></span></button>
+    <button type="button" class="step" data-step="export"><b>7</b><span>Export</span></button>
+  </nav>
 
-      <fieldset>
-        <legend>Grid</legend>
+  <div class="app">
+    <aside class="side">
+      <!-- 1 · Image -->
+      <section class="step-panel" data-panel="image">
+        <h2>Choose an image</h2>
+        <p>Start with an AI image that imitates pixel art: big blocky "pixels" of uneven size and slightly noisy colors. Pixelize finds the real grid and rebuilds the art at its true size.</p>
+        <ul class="tips">
+          <li>Drop the file on the box, click it, or paste it with <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
+          <li>PNG works best. A spritesheet with several frames is fine.</li>
+          <li>Everything runs in your browser; nothing is uploaded.</li>
+        </ul>
+        <button type="button" class="ghost" id="sampleBtn">Try it with a sample</button>
+        <p class="hint" id="srcName"></p>
+      </section>
+
+      <!-- 2 · Pixels -->
+      <section class="step-panel" data-panel="grid" hidden>
+        <h2>Find the pixel grid</h2>
+        <p>The orange lines on the original mark each real pixel. If they line up with the blocks, go on. If not, adjust them here.</p>
         <div class="seg" role="radiogroup" aria-label="Grid mode">
           <label><input type="radio" name="sizeMode" id="sizeAuto" value="auto" checked>Auto</label>
           <label><input type="radio" name="sizeMode" id="sizeManual" value="manual">Manual</label>
-          <label><input type="radio" name="sizeMode" id="sizeExact" value="exact">Exact</label>
+          <label><input type="radio" name="sizeMode" id="sizeExact" value="exact">Exact size</label>
         </div>
         <div class="box" id="autoBox">
-          <p class="hint" id="gridAutoInfo">Detects the size of the simulated pixels on its own.</p>
-          <button type="button" class="ghost small" id="toManual">Fine-tune this grid manually</button>
+          <p class="hint" id="gridAutoInfo">Detects the size of the fake pixels on its own.</p>
+          <button type="button" class="ghost small" id="toManual">Fine-tune this grid</button>
         </div>
         <div class="box" id="manualBox" hidden>
-          <div class="row pair"><span>Cell X</span><input type="range" id="cellXr" min="2" max="64" step="0.1" value="16" aria-label="Cell X slider"><input type="number" id="cellX" min="2" step="0.1" value="16" aria-label="Cell X in px"></div>
+          <div class="row pair"><span>Pixel size</span><input type="range" id="cellXr" min="2" max="64" step="0.1" value="16" aria-label="Cell X slider"><input type="number" id="cellX" min="2" step="0.1" value="16" aria-label="Cell X in px"></div>
           <label class="check"><input type="checkbox" id="square" checked>Square pixels</label>
-          <div class="row pair" id="cellYRow" hidden><span>Cell Y</span><input type="range" id="cellYr" min="2" max="64" step="0.1" value="16" aria-label="Cell Y slider"><input type="number" id="cellY" min="2" step="0.1" value="16" aria-label="Cell Y in px"></div>
-          <div class="row pair"><span>Offset X</span><input type="range" id="offXr" min="0" max="16" step="0.5" value="0" aria-label="Offset X slider"><input type="number" id="offX" min="0" step="0.5" value="0" aria-label="Offset X in px"></div>
-          <div class="row pair"><span>Offset Y</span><input type="range" id="offYr" min="0" max="16" step="0.5" value="0" aria-label="Offset Y slider"><input type="number" id="offY" min="0" step="0.5" value="0" aria-label="Offset Y in px"></div>
-          <label class="check"><input type="checkbox" id="snap" checked>Snap grid lines to nearby edges</label>
-          <p class="hint">Sizes are in source pixels; watch the lines on the original. With snapping on, the lines follow the edges; turn it off to place them yourself with the offset.</p>
+          <div class="row pair" id="cellYRow" hidden><span>Height</span><input type="range" id="cellYr" min="2" max="64" step="0.1" value="16" aria-label="Cell Y slider"><input type="number" id="cellY" min="2" step="0.1" value="16" aria-label="Cell Y in px"></div>
+          <label class="check"><input type="checkbox" id="snap" checked>Snap lines to the edges in the image</label>
+          <div class="row pair"><span>Shift X</span><input type="range" id="offXr" min="0" max="16" step="0.5" value="0" aria-label="Offset X slider"><input type="number" id="offX" min="0" step="0.5" value="0" aria-label="Offset X in px"></div>
+          <div class="row pair"><span>Shift Y</span><input type="range" id="offYr" min="0" max="16" step="0.5" value="0" aria-label="Offset Y slider"><input type="number" id="offY" min="0" step="0.5" value="0" aria-label="Offset Y in px"></div>
+          <p class="hint">Sizes are in pixels of the original. Turn snapping off to place the lines yourself with Shift.</p>
         </div>
         <div class="box" id="exactBox" hidden>
           <div class="row"><input type="number" id="fw" min="1" value="64" aria-label="Width"><span>×</span><input type="number" id="fh" min="1" value="64" aria-label="Height"><span>px</span></div>
-          <p class="hint">Splits the image into exactly this many pixels.</p>
+          <p class="hint">Use this when you already know the size the art should have.</p>
         </div>
-      </fieldset>
+        <label class="check"><input type="checkbox" id="showGrid" checked>Show the lines on the original</label>
+        <details class="more">
+          <summary>Advanced</summary>
+          <div class="row"><span>Min alpha</span><input type="range" id="alpha" min="0" max="255" step="1" value="128"><output id="alphaOut">128</output></div>
+          <p class="hint">Pixels more transparent than this become fully transparent.</p>
+        </details>
+      </section>
 
-      <fieldset>
-        <legend>Colors</legend>
+      <!-- 3 · Colors -->
+      <section class="step-panel" data-panel="colors" hidden>
+        <h2>Pick the colors</h2>
+        <p>AI images have dozens of almost equal shades. This merges them into a clean palette.</p>
         <div class="seg" role="radiogroup" aria-label="Palette mode">
           <label><input type="radio" name="palMode" id="palAuto" value="auto" checked>Auto</label>
-          <label><input type="radio" name="palMode" id="palFixed" value="fixed">Count</label>
-          <label><input type="radio" name="palMode" id="palImported" value="imported">Palette</label>
+          <label><input type="radio" name="palMode" id="palFixed" value="fixed">Fixed count</label>
+          <label><input type="radio" name="palMode" id="palImported" value="imported">My palette</label>
         </div>
-        <div class="row" id="tolRow"><span>Tolerance</span><input type="range" id="tol" min="2" max="30" step="1" value="10"><output id="tolOut">10</output></div>
+        <div class="row" id="tolRow"><span>Merge</span><input type="range" id="tol" min="2" max="30" step="1" value="10" aria-label="Tolerance"><output id="tolOut">10</output></div>
         <div class="row" id="colorsRow" hidden><span>Colors</span><input type="number" id="colors" min="2" max="256" value="16"></div>
         <div class="box" id="importBox" hidden>
           <div class="btns">
             <button type="button" class="ghost small" id="palFileBtn">Load palette file</button>
-            <button type="button" class="ghost small" id="useResultPal">Use the result's colors</button>
+            <button type="button" class="ghost small" id="useResultPal">Use the current colors</button>
           </div>
           <input type="file" id="palFile" accept="image/*,.hex,.gpl,.txt,.pal" hidden>
           <div class="row"><input type="text" id="palText" placeholder="#1b1530 #5a5470 …" aria-label="Paste hex codes"><button type="button" class="ghost small" id="palApply">Apply</button></div>
           <div class="mini-swatches" id="importSwatches"></div>
           <p class="hint" id="importInfo">Load a PNG, .hex or .gpl palette (Lospec exports work), or paste hex codes. Every pixel snaps to the nearest color.</p>
         </div>
-        <p class="hint" id="palHint">Higher tolerance merges more similar shades and leaves fewer colors.</p>
-        <label class="check"><input type="checkbox" id="clean">Clean stray pixels</label>
+        <p class="hint" id="palHint">Move it right to merge more shades and get fewer colors.</p>
+        <label class="check"><input type="checkbox" id="clean">Remove stray noise pixels</label>
         <div class="row" id="cleanRow" hidden><span>Strength</span><input type="range" id="cleanStr" min="2" max="40" step="1" value="15"><output id="cleanOut">15</output></div>
-      </fieldset>
+        <p class="hint">Click a color under the image to lock it, replace it or merge it into another one.</p>
+      </section>
 
-      <fieldset>
-        <legend>Transparency</legend>
-        <div class="row"><span>Min alpha</span><input type="range" id="alpha" min="0" max="255" step="1" value="128"><output id="alphaOut">128</output></div>
-      </fieldset>
-
-      <fieldset>
-        <legend>Background</legend>
-        <label class="check"><input type="checkbox" id="removeBg">Remove the background</label>
-        <div class="seg" role="radiogroup" id="bgModeRow" aria-label="Background removal mode">
-          <label><input type="radio" name="bgMode" id="bgEdge" value="edge" checked>Touching the edge</label>
-          <label><input type="radio" name="bgMode" id="bgAll" value="all">All of that color</label>
+      <!-- 4 · Background & crop -->
+      <section class="step-panel" data-panel="clean" hidden>
+        <h2>Background and crop</h2>
+        <div class="sub">
+          <label class="check strong"><input type="checkbox" id="removeBg">Make the background transparent</label>
+          <div class="box" id="bgBox">
+            <div class="row bgrow">
+              <span class="bgchip"><i id="bgSwatch"></i><code id="bgHex">–</code></span>
+              <button type="button" class="ghost small" id="bgAuto">Auto</button>
+            </div>
+            <button type="button" class="tool wide" data-tool="bg">Pick the background on the image</button>
+            <div class="seg" role="radiogroup" id="bgModeRow" aria-label="Background removal mode">
+              <label><input type="radio" name="bgMode" id="bgEdge" value="edge" checked>Only around the art</label>
+              <label><input type="radio" name="bgMode" id="bgAll" value="all">Everywhere</label>
+            </div>
+            <div class="row"><span>Similar shades</span><input type="range" id="bgTol" min="0" max="30" step="1" value="6" aria-label="Background tolerance"><output id="bgTolOut">6</output></div>
+            <p class="hint">"Only around the art" keeps the same color inside the sprite (eyes, highlights).</p>
+          </div>
         </div>
-        <div class="row bgrow">
-          <span>Color</span>
-          <span class="bgchip"><i id="bgSwatch"></i><code id="bgHex">–</code></span>
-          <button type="button" class="ghost small" id="bgAuto">Auto</button>
+        <div class="sub">
+          <span class="label">Crop</span>
+          <div class="seg" role="radiogroup" aria-label="Crop mode">
+            <label><input type="radio" name="cropMode" id="cropOff" value="off" checked>None</label>
+            <label><input type="radio" name="cropMode" id="cropTrim" value="trim">Trim empty</label>
+            <label><input type="radio" name="cropMode" id="cropManual" value="manual">Manual</label>
+          </div>
+          <div class="box" id="trimBox" hidden>
+            <div class="row"><span>Keep a margin of</span><input type="number" id="cropPad" min="0" value="0" aria-label="Margin in px"><span>px</span></div>
+            <p class="hint">Cuts the empty rows and columns around the art.</p>
+          </div>
+          <div class="box" id="manualCropBox" hidden>
+            <div class="margins">
+              <label>Top<input type="number" id="cropT" min="0" value="0"></label>
+              <label>Left<input type="number" id="cropL" min="0" value="0"></label>
+              <label>Right<input type="number" id="cropR" min="0" value="0"></label>
+              <label>Bottom<input type="number" id="cropB" min="0" value="0"></label>
+            </div>
+            <p class="hint">Pixels to cut from each side.</p>
+          </div>
+          <p class="crop-info" id="cropInfo"></p>
         </div>
-        <div class="row"><span>Tolerance</span><input type="range" id="bgTol" min="0" max="30" step="1" value="6"><output id="bgTolOut">6</output></div>
-        <p class="hint">Uses the most common color along the edge. Pick another with the BG tool on the result. Tolerance also removes shades almost equal to the background.</p>
-      </fieldset>
+      </section>
 
-      <fieldset>
-        <legend>View and download</legend>
-        <label class="check"><input type="checkbox" id="showGrid" checked>Show the grid on the original</label>
-        <div class="row"><span>Download scale</span><input type="number" id="scale" min="1" max="64" value="8"></div>
+      <!-- 5 · Touch up -->
+      <section class="step-panel" data-panel="edit" hidden>
+        <h2>Touch up pixels</h2>
+        <p>Fix single pixels by hand. You can skip this.</p>
+        <div class="toolgrid" role="toolbar" aria-label="Editing tools">
+          <button type="button" class="tool" data-tool="pan" title="Move the view (H, or hold Space)">Move <kbd>H</kbd></button>
+          <button type="button" class="tool" data-tool="pencil" title="Pencil (B)">Pencil <kbd>B</kbd></button>
+          <button type="button" class="tool" data-tool="eraser" title="Eraser (E)">Eraser <kbd>E</kbd></button>
+          <button type="button" class="tool" data-tool="fill" title="Fill an area of one color (G)">Fill <kbd>G</kbd></button>
+          <button type="button" class="tool" data-tool="picker" title="Take a color from the image (I)">Eyedropper <kbd>I</kbd></button>
+        </div>
+        <label class="colorpick">Color <input type="color" id="drawColor" value="#1b1530" aria-label="Drawing color"><code id="drawHex">#1b1530</code></label>
         <div class="btns">
-          <button type="button" id="dl1">PNG 1×</button>
-          <button type="button" id="dlN" class="ghost">PNG ×8</button>
+          <button type="button" class="ghost small" id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
+          <button type="button" class="ghost small" id="redoBtn" title="Redo (Ctrl+Y)">Redo</button>
+          <button type="button" class="ghost small" id="clearEdits">Clear edits</button>
         </div>
-        <p class="status" id="status" role="status"></p>
-      </fieldset>
+        <p class="hint" id="editInfo">No pixel edits</p>
+        <p class="hint">Click a color in the palette below the image to draw with it. Edits are lost if the size of the result changes, so finish the earlier steps first.</p>
+      </section>
 
-      <fieldset>
-        <legend>Batch</legend>
-        <p class="hint">Process several images with the current settings and download them in one .zip. Pixel edits are not applied.</p>
-        <label class="check"><input type="checkbox" id="batchPalette">Snap all of them to the current palette</label>
-        <button type="button" class="ghost" id="batchBtn">Choose images…</button>
-        <input type="file" id="batchFiles" accept="image/*" multiple hidden>
-        <p class="status" id="batchStatus" role="status"></p>
-      </fieldset>
+      <!-- 6 · Animation -->
+      <section class="step-panel" data-panel="frames" hidden>
+        <h2>Animation</h2>
+        <label class="check strong"><input type="checkbox" id="animOn" checked>This image has several frames</label>
+        <p class="hint" id="animOffHint">Turn it on for spritesheets to split, align and play the frames. Single images can skip this step.</p>
+        <div class="box" id="animOpts">
+          <span class="label">Split into frames</span>
+          <div class="seg" role="radiogroup" aria-label="Split mode">
+            <label><input type="radio" name="splitMode" id="splitAuto" value="auto" checked>Auto</label>
+            <label><input type="radio" name="splitMode" id="splitGrid" value="grid">Grid</label>
+          </div>
+          <div class="row" id="gridRow" hidden>
+            <span>Columns</span><input type="number" id="cols" min="1" value="4">
+            <span>Rows</span><input type="number" id="rows" min="1" value="1">
+          </div>
+          <div class="box" id="autoRows">
+            <div class="row"><span>Min gap</span><input type="number" id="minGap" min="1" value="1"><span>px</span></div>
+            <div class="seg" role="radiogroup" aria-label="Frame alignment">
+              <label><input type="radio" name="align" id="alignBottom" value="bottom" checked>Align feet</label>
+              <label><input type="radio" name="align" id="alignCenter" value="center">Center</label>
+            </div>
+          </div>
+          <p class="hint" id="splitHint">Finds each frame by the empty space around it.</p>
 
-      <fieldset>
-        <legend>Settings</legend>
-        <p class="hint">Your settings and imported palette are remembered in this browser.</p>
-        <button type="button" class="ghost small" id="resetSettings">Reset all settings</button>
-      </fieldset>
+          <span class="label">Playback</span>
+          <div class="row"><span>Speed</span><input type="range" id="fps" min="1" max="30" step="1" value="8" aria-label="Frames per second"><output id="fpsOut">8</output><span>fps</span></div>
+          <div class="seg" role="radiogroup" aria-label="Direction">
+            <label><input type="radio" name="dir" id="dirFwd" value="forward" checked>Forward</label>
+            <label><input type="radio" name="dir" id="dirRev" value="reverse">Reverse</label>
+            <label><input type="radio" name="dir" id="dirPing" value="pingpong">Ping-pong</label>
+          </div>
+          <div class="seg" role="radiogroup" aria-label="At the end">
+            <label><input type="radio" name="endMode" id="endLoop" value="loop" checked>Loop</label>
+            <label><input type="radio" name="endMode" id="endOnce" value="once">Play once</label>
+          </div>
+          <label class="check"><input type="checkbox" id="onion">Onion skin on the preview</label>
+        </div>
+      </section>
+
+      <!-- 7 · Export -->
+      <section class="step-panel" data-panel="export" hidden>
+        <h2>Export</h2>
+        <div class="sub">
+          <span class="label">Image</span>
+          <div class="row"><span>Scale</span><input type="number" id="scale" min="1" max="64" value="8" aria-label="Download scale"><span>×</span></div>
+          <div class="btns">
+            <button type="button" id="dl1">PNG 1×</button>
+            <button type="button" id="dlN" class="ghost">PNG ×8</button>
+          </div>
+          <p class="hint">1× is the real pixel art. The scaled copy is for sharing.</p>
+        </div>
+        <div class="sub" id="animExport">
+          <span class="label">Animation</span>
+          <button type="button" id="dlStrip">Strip PNG for GameMaker</button>
+          <p class="hint">Saved as <code>_stripN.png</code>, which GameMaker splits into frames on import.</p>
+          <div class="row"><span>GIF scale</span><input type="number" id="gifScale" min="1" max="32" value="4"><button type="button" class="ghost small" id="dlGif" style="flex:1">GIF</button></div>
+          <details class="more">
+            <summary>More formats</summary>
+            <div class="row"><span>Columns</span><input type="number" id="sheetCols" min="0" value="0" aria-label="Sheet columns, 0 for auto"><span>Padding</span><input type="number" id="sheetPad" min="0" value="0" aria-label="Sheet padding in px"></div>
+            <button type="button" class="ghost" id="dlSheet">Sheet PNG</button>
+            <button type="button" class="ghost" id="dlZip">Frames ZIP</button>
+            <label class="check"><input type="checkbox" id="repeatHolds" checked>Repeat frames by their duration</label>
+            <p class="hint">Columns 0 makes a square-ish sheet.</p>
+          </details>
+        </div>
+        <details class="more sub">
+          <summary>Batch: several images at once</summary>
+          <p class="hint">Processes more images with these settings into one .zip. Pixel edits are not applied.</p>
+          <label class="check"><input type="checkbox" id="batchPalette">Snap them all to this palette</label>
+          <button type="button" class="ghost" id="batchBtn">Choose images…</button>
+          <input type="file" id="batchFiles" accept="image/*" multiple hidden>
+          <p class="status" id="batchStatus" role="status"></p>
+        </details>
+        <div class="sub">
+          <p class="hint">Settings are remembered in this browser.</p>
+          <button type="button" class="ghost small" id="resetSettings">Reset all settings</button>
+        </div>
+      </section>
+
+      <div class="stepnav">
+        <button type="button" class="ghost" id="backBtn">Back</button>
+        <button type="button" id="nextBtn">Next</button>
+      </div>
+      <p class="status" id="status" role="status"></p>
     </aside>
 
-    <section class="main">
-      <div class="stats">
-        <div class="stat"><b id="stIn">–</b><span>Original image</span></div>
-        <div class="stat"><b id="stCell">–</b><span>Simulated pixel<span id="stConf"></span></span></div>
-        <div class="stat"><b id="stOut">–</b><span>Real size</span></div>
-        <div class="stat"><b id="stPal">–</b><span>Colors in the result</span></div>
+    <section class="work">
+      <div class="welcome" data-show="image">
+        <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose an image">
+          <strong>Drop an image here</strong>
+          <small>or click to choose one</small>
+        </div>
+        <input type="file" id="file" accept="image/*" hidden>
       </div>
-      <div class="warnbar" id="confWarn" hidden>
-        <p>The grid detection is uncertain for this image. Check the grid lines on the original, or set the cell size yourself.</p>
+
+      <div class="stats" data-show="grid colors clean edit frames export">
+        <div class="stat"><span>Original</span><b id="stIn">–</b></div>
+        <div class="stat"><span>Fake pixel<span id="stConf"></span></span><b id="stCell">–</b></div>
+        <div class="stat"><span>Real size</span><b id="stOut">–</b></div>
+        <div class="stat"><span>Colors</span><b id="stPal">–</b></div>
+      </div>
+      <div class="warnbar" id="confWarn" data-show="grid" hidden>
+        <p>The grid detection is unsure about this image. Check the lines on the original, or set the pixel size yourself.</p>
         <button type="button" class="ghost small" id="warnManual">Adjust manually</button>
       </div>
 
-      <div class="views">
-        <figure class="panel">
+      <div class="views" data-show="grid colors clean edit export">
+        <figure class="panel" data-show="grid">
           <figcaption><span class="label">Original</span><span class="tag" id="srcTag"></span></figcaption>
           <div class="stage"><canvas id="srcCanvas"></canvas></div>
         </figure>
         <figure class="panel">
           <figcaption><span class="label">Result</span><span class="tag" id="resTag"></span></figcaption>
-          <div class="toolbar" role="toolbar" aria-label="Editing tools">
-            <div class="tools">
-              <button type="button" class="tool" data-tool="pan" title="Move the view (H, or hold Space)">Move</button>
-              <button type="button" class="tool" data-tool="pencil" title="Pencil (B)">Pencil</button>
-              <button type="button" class="tool" data-tool="eraser" title="Eraser (E)">Eraser</button>
-              <button type="button" class="tool" data-tool="fill" title="Fill an area of one color (G)">Fill</button>
-              <button type="button" class="tool" data-tool="picker" title="Eyedropper (I)">Pick</button>
-              <button type="button" class="tool" data-tool="bg" title="Use the clicked color as the background">BG</button>
-            </div>
-            <label class="colorpick" title="Drawing color"><input type="color" id="drawColor" value="#1b1530" aria-label="Drawing color"><code id="drawHex">#1b1530</code></label>
-          </div>
-          <div class="stage edit-stage pan" id="editStage"><canvas id="editCanvas" aria-label="Editable result"></canvas></div>
+          <div class="stage edit-stage pan" id="editStage"><canvas id="editCanvas" aria-label="Result"></canvas></div>
           <div class="toolbar">
             <div class="group">
               <button type="button" class="ghost small" id="zoomOutBtn" title="Zoom out (−)" aria-label="Zoom out">−</button>
               <output id="zoomLabel">100%</output>
               <button type="button" class="ghost small" id="zoomInBtn" title="Zoom in (+)" aria-label="Zoom in">+</button>
               <button type="button" class="ghost small" id="fitBtn" title="Fit (0)">Fit</button>
-              <label class="check"><input type="checkbox" id="pixGrid" checked>Pixel grid</label>
+              <label class="check"><input type="checkbox" id="pixGrid" checked>Grid</label>
             </div>
-            <div class="group">
-              <button type="button" class="ghost small" id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
-              <button type="button" class="ghost small" id="redoBtn" title="Redo (Ctrl+Y)">Redo</button>
-              <button type="button" class="ghost small" id="clearEdits">Clear edits</button>
-            </div>
-          </div>
-          <div class="toolbar">
-            <div class="group" style="flex:1">
-              <label class="check"><input type="checkbox" id="compare">Before / after</label>
+            <div class="group compare" data-show="colors clean edit">
+              <label class="check"><input type="checkbox" id="compare">Compare</label>
               <input type="range" id="split" min="0" max="100" value="50" aria-label="Before and after split" disabled>
             </div>
-            <span class="edit-info" id="editInfo">No pixel edits</span>
           </div>
         </figure>
       </div>
 
-      <div class="panel">
+      <div class="panel" data-show="colors edit">
         <div class="pal-head">
-          <span class="label">Palette · click a color to edit it or draw with it</span>
+          <span class="label">Palette · click a color</span>
           <div class="group">
             <button type="button" class="ghost small" id="copyAllHex">Copy all hex</button>
-            <button type="button" class="ghost small" id="palReset" hidden>Reset palette edits</button>
+            <button type="button" class="ghost small" id="palReset" hidden>Undo color changes</button>
           </div>
         </div>
         <div class="swatches" id="swatches"></div>
         <div class="sw-editor" id="swEditor" hidden>
           <span class="sw-info" id="swInfo"></span>
           <button type="button" class="ghost small" id="swCopy">Copy hex</button>
-          <button type="button" class="ghost small" id="swLock">Lock</button>
+          <button type="button" class="ghost small" id="swLock" title="Locked colors stay when you change the settings">Lock</button>
           <label class="colorpick">Replace with <input type="color" id="swReplace" aria-label="Replacement color"></label>
           <button type="button" class="ghost small" id="swMerge">Merge into…</button>
         </div>
-        <p class="hint" id="swHint" style="margin-top:8px">Locked colors stay in the palette when you change the tolerance or count. Replace and merge are remembered while you tweak the settings.</p>
       </div>
 
-      <div class="panel anim">
-        <div class="anim-head">
-          <label class="check"><input type="checkbox" id="animOn" checked><span class="label nomargin">Spritesheet and animation</span></label>
-          <span class="tag" id="animInfo"></span>
+      <div class="anim" data-show="frames">
+        <div class="panel anim-off" id="animOff">
+          <p>Animation is off. Turn on <b>This image has several frames</b> on the left if this is a spritesheet, or go on to export.</p>
         </div>
         <div class="anim-body" id="animBody">
-          <div class="anim-opts">
-            <div class="seg" role="radiogroup" aria-label="Split mode">
-              <label><input type="radio" name="splitMode" id="splitAuto" value="auto" checked>Auto</label>
-              <label><input type="radio" name="splitMode" id="splitGrid" value="grid">Grid</label>
-            </div>
-            <div class="row" id="gridRow" hidden>
-              <span>Columns</span><input type="number" id="cols" min="1" value="4">
-              <span>Rows</span><input type="number" id="rows" min="1" value="1">
-            </div>
-            <div class="box" id="autoRows">
-              <div class="row"><span>Min gap</span><input type="number" id="minGap" min="1" value="1"><span>px</span></div>
-              <div class="seg" role="radiogroup" aria-label="Frame alignment">
-                <label><input type="radio" name="align" id="alignBottom" value="bottom" checked>Align bottom</label>
-                <label><input type="radio" name="align" id="alignCenter" value="center">Center</label>
-              </div>
-            </div>
-            <p class="hint" id="splitHint">Finds each frame by the empty space (background color) around it.</p>
-
-            <div class="subgroup">
-              <span class="label">Playback</span>
-              <div class="row"><span>FPS</span><input type="range" id="fps" min="1" max="30" step="1" value="8"><output id="fpsOut">8</output></div>
-              <div class="seg" role="radiogroup" aria-label="Direction">
-                <label><input type="radio" name="dir" id="dirFwd" value="forward" checked>Forward</label>
-                <label><input type="radio" name="dir" id="dirRev" value="reverse">Reverse</label>
-                <label><input type="radio" name="dir" id="dirPing" value="pingpong">Ping-pong</label>
-              </div>
-              <div class="seg" role="radiogroup" aria-label="At the end">
-                <label><input type="radio" name="endMode" id="endLoop" value="loop" checked>Loop</label>
-                <label><input type="radio" name="endMode" id="endOnce" value="once">Stop at the end</label>
-              </div>
-              <label class="check"><input type="checkbox" id="onion">Onion skin (show neighbor frames)</label>
-              <button type="button" class="ghost" id="playBtn">Pause</button>
-            </div>
-
-            <div class="subgroup">
-              <span class="label">Export</span>
-              <label class="check"><input type="checkbox" id="repeatHolds" checked>Repeat frames by their duration</label>
-              <button type="button" id="dlStrip">Strip PNG</button>
-              <div class="row"><span>Columns</span><input type="number" id="sheetCols" min="0" value="0" aria-label="Sheet columns, 0 for auto"><span>Padding</span><input type="number" id="sheetPad" min="0" value="0" aria-label="Sheet padding in px"></div>
-              <button type="button" class="ghost" id="dlSheet">Sheet PNG</button>
-              <button type="button" class="ghost" id="dlZip">Frames ZIP</button>
-              <div class="row"><span>GIF scale</span><input type="number" id="gifScale" min="1" max="32" value="4"><button type="button" class="ghost small" id="dlGif" style="flex:1">GIF</button></div>
-              <p class="hint">The strip is saved as <code>_stripN.png</code>, which GameMaker splits into frames on import. Columns 0 means a square-ish sheet. The GIF bakes in the direction, looping and durations.</p>
-            </div>
-          </div>
-          <div class="anim-view">
+          <figure class="panel">
+            <figcaption><span class="label">Preview</span><span class="tag" id="animInfo"></span></figcaption>
             <div class="stage anim-stage"><canvas id="animCanvas"></canvas></div>
+            <div class="toolbar">
+              <button type="button" class="ghost small" id="playBtn">Pause</button>
+              <span class="frame-info" id="frameInfo"></span>
+            </div>
+          </figure>
+          <figure class="panel">
+            <figcaption><span class="label">Align frame</span><span class="tag" id="alignTag"></span></figcaption>
+            <div class="stage align-stage" id="alignStage"><canvas id="alignCanvas" tabindex="0" aria-label="Selected frame. Drag it or use the arrow keys to move it."></canvas></div>
+            <div class="toolbar">
+              <div class="group">
+                <button type="button" class="ghost small" id="nudgeL" aria-label="Move left">←</button>
+                <button type="button" class="ghost small" id="nudgeU" aria-label="Move up">↑</button>
+                <button type="button" class="ghost small" id="nudgeD" aria-label="Move down">↓</button>
+                <button type="button" class="ghost small" id="nudgeR" aria-label="Move right">→</button>
+                <output id="nudgeVal">0, 0</output>
+                <button type="button" class="ghost small" id="nudgeReset">Reset</button>
+              </div>
+              <div class="group">
+                <span class="muted">Ghost</span>
+                <div class="seg small" role="radiogroup" aria-label="Ghost frame">
+                  <label><input type="radio" name="ghost" value="prev" checked>Previous</label>
+                  <label><input type="radio" name="ghost" value="first">First</label>
+                  <label><input type="radio" name="ghost" value="none">None</label>
+                </div>
+              </div>
+            </div>
+            <p class="hint">Drag the frame or use the arrow keys to move it 1 px. The faint frame behind it and the center lines help you line it up.</p>
+          </figure>
+          <div class="panel frames-panel">
             <div class="frames" id="frames"></div>
             <div class="row sel-row">
-              <span class="frame-info" id="frameInfo"></span>
-              <button type="button" class="ghost small" id="moveL" aria-label="Move frame left">◀</button>
-              <button type="button" class="ghost small" id="moveR" aria-label="Move frame right">▶</button>
+              <button type="button" class="ghost small" id="moveL" aria-label="Move frame earlier">◀ Earlier</button>
+              <button type="button" class="ghost small" id="moveR" aria-label="Move frame later">Later ▶</button>
               <button type="button" class="ghost small" id="selToggle">Exclude</button>
-            </div>
-            <div class="row sel-row">
-              <span>Duration</span>
+              <span class="muted">Duration</span>
               <button type="button" class="ghost small" id="holdMinus" aria-label="Shorter">−</button>
               <output id="holdVal">1×</output>
               <button type="button" class="ghost small" id="holdPlus" aria-label="Longer">+</button>
-              <span style="margin-left:8px">Nudge</span>
-              <button type="button" class="ghost small" id="nudgeL" aria-label="Nudge left">←</button>
-              <button type="button" class="ghost small" id="nudgeU" aria-label="Nudge up">↑</button>
-              <button type="button" class="ghost small" id="nudgeD" aria-label="Nudge down">↓</button>
-              <button type="button" class="ghost small" id="nudgeR" aria-label="Nudge right">→</button>
-              <output id="nudgeVal">0, 0</output>
-              <button type="button" class="ghost small" id="nudgeReset">Reset</button>
+              <button type="button" class="ghost small" id="resetAllOffsets">Reset all positions</button>
             </div>
-            <p class="hint">Click a frame to view it. Drag it to reorder, or select it and use ◀ ▶ (Alt+arrows). Shift+arrows nudge it 1 px. The × takes it out of the animation.</p>
+            <p class="hint">Click a frame to align it. Drag frames to reorder them. × takes a frame out of the animation.</p>
           </div>
         </div>
       </div>

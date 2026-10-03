@@ -6,9 +6,10 @@ import { findFrames, gridFrames, nextIndex, playbackSequence, type Direction, ty
 import { encodeGif } from '../export/gif';
 import { makeZip, type ZipEntry } from '../export/zip';
 import { app, onResult } from './app';
-import { $, field, int, isChecked, onAll, radio, reducedMotion, setStatus, wait } from './dom';
+import { $, cssVar, field, int, isChecked, onAll, radio, reducedMotion, setStatus, wait } from './dom';
 import { syncSplit } from './controls';
 import { baseName, canvasBlob, canvasBytes, saveBlob } from './downloads';
+import { currentStep, onStep } from './steps';
 
 interface Anim {
   frames: Rect[];
@@ -21,16 +22,17 @@ let anim: Anim | null = null;
 let framesKey = '';
 let order: number[] = [];                       // frame indices in playback order
 let excluded = new Set<number>();
-let selected: number | null = null;             // frame shown while paused
+let selected: number | null = null;             // frame in the align view (and shown while paused)
 let offsets = new Map<number, { dx: number; dy: number }>();
 let holds = new Map<number, number>();          // how many ticks a frame lasts
 let playing = !reducedMotion;
 let animIndex = 0, animLast = 0;
 let pingDir = 1;
-let ended = false;                              // "stop at the end" reached the end
+let ended = false;                              // "play once" reached the end
 
 const activeFrames = () => (anim ? order.filter((i) => !excluded.has(i)) : []);
 const holdOf = (i: number) => holds.get(i) || 1;
+const offsetOf = (i: number) => offsets.get(i) || { dx: 0, dy: 0 };
 const playDir = () => radio<Direction>('dir');
 const playOnce = () => radio('endMode') === 'once';
 
@@ -52,8 +54,22 @@ function buildAnim(): Anim {
     ended = false;
     pingDir = 1;
   }
-  const W = Math.max(0, ...frames.map((f) => f.w)), H = Math.max(0, ...frames.map((f) => f.h));
+  const auto = mode !== 'grid';
+  const fw = Math.max(0, ...frames.map((f) => f.w)), fh = Math.max(0, ...frames.map((f) => f.h));
   const bottom = radio('align') === 'bottom';
+  // where each frame lands: centered (feet or middles lined up), then moved by its offset
+  const place = frames.map((f, n) => ({
+    x: (auto ? Math.floor((fw - f.w) / 2) : 0) + offsetOf(n).dx,
+    y: (auto ? (bottom ? fh - f.h : Math.floor((fh - f.h) / 2)) : 0) + offsetOf(n).dy,
+  }));
+  // auto frames grow the canvas when moved instead of getting cut; grid cells keep their size
+  let x0 = 0, y0 = 0, W = fw, H = fh;
+  if (auto && frames.length) {
+    x0 = Math.min(...place.map((p) => p.x));
+    y0 = Math.min(...place.map((p) => p.y));
+    W = Math.max(...place.map((p, n) => p.x + frames[n].w)) - x0;
+    H = Math.max(...place.map((p, n) => p.y + frames[n].h)) - y0;
+  }
   // keep the background color as padding when it was not removed
   const pad = !isChecked('removeBg') && base.bgKey !== null ? hex(rgbOfKey(base.bgKey)) : null;
   const canvases = frames.map((f, n) => {
@@ -71,10 +87,7 @@ function buildAnim(): Anim {
     c.height = H;
     const ctx = c.getContext('2d')!;
     if (pad) { ctx.fillStyle = pad; ctx.fillRect(0, 0, W, H); }
-    const o = offsets.get(n) || { dx: 0, dy: 0 };
-    const dx = (mode === 'grid' ? 0 : Math.floor((W - f.w) / 2)) + o.dx;
-    const dy = (mode === 'grid' ? 0 : bottom ? H - f.h : Math.floor((H - f.h) / 2)) + o.dy;
-    ctx.drawImage(tmp, dx, dy);
+    ctx.drawImage(tmp, place[n].x - x0, place[n].y - y0);
     return c;
   });
   return { frames, W, H, canvases };
@@ -100,17 +113,14 @@ function frameCard(i: number, pos: number): HTMLElement {
   const label = document.createElement('span');
   label.textContent = String(pos + 1);
   if (holdOf(i) > 1) { const h = document.createElement('em'); h.textContent = ` ${holdOf(i)}×`; label.append(h); }
+  const o = offsetOf(i);
+  if (o.dx || o.dy) { const m = document.createElement('em'); m.textContent = ' •'; m.title = 'Moved'; label.append(m); }
   card.append(toggle, anim!.canvases[i], label);
   card.addEventListener('keydown', (e) => {
     if (e.target !== card) return;
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectFrame(i); }
     else if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); moveFrame(i, -1); }
     else if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); moveFrame(i, 1); }
-    else if (e.shiftKey && e.key.startsWith('Arrow')) {
-      e.preventDefault();
-      const d = ({ ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<string, [number, number]>)[e.key];
-      if (d) nudge(i, d[0], d[1]);
-    }
   });
   return card;
 }
@@ -118,12 +128,22 @@ function frameCard(i: number, pos: number): HTMLElement {
 export function renderAnim(): void {
   const on = isChecked('animOn');
   $('animBody').hidden = !on;
-  if (!on || !app.result || !app.base) { anim = null; $('animInfo').textContent = ''; return; }
+  $('animOff').hidden = on;
+  $('animOpts').hidden = !on;
+  $('animOffHint').hidden = on;
+  if (!on || !app.result || !app.base) {
+    anim = null;
+    $('animInfo').textContent = '';
+    $('animExport').hidden = true;
+    return;
+  }
   // keep keyboard focus on the same frame across re-renders
   const focusFrame = (document.activeElement as HTMLElement | null)?.closest?.<HTMLElement>('.frame')?.dataset.frame ?? null;
   anim = buildAnim();
   const n = anim.frames.length;
-  $('animInfo').textContent = n ? `${activeFrames().length} of ${n} frames · ${anim.W}×${anim.H} px` : 'No frames';
+  if (selected === null || !order.includes(selected)) selected = order[0] ?? null;
+  $('animExport').hidden = !n;
+  $('animInfo').textContent = n ? `${activeFrames().length} of ${n} frames · ${anim.W}×${anim.H} px` : 'No frames found';
   const cv = $<HTMLCanvasElement>('animCanvas');
   cv.width = Math.max(1, anim.W);
   cv.height = Math.max(1, anim.H);
@@ -131,6 +151,7 @@ export function renderAnim(): void {
   if (focusFrame !== null) $('frames').querySelector<HTMLElement>(`.frame[data-frame="${focusFrame}"]`)?.focus();
   updateSelectionUI();
   drawAnimFrame();
+  drawAlign();
 }
 
 function updateSelectionUI(): void {
@@ -141,9 +162,11 @@ function updateSelectionUI(): void {
   field('selToggle').disabled = !has;
   $('selToggle').textContent = has && excluded.has(selected!) ? 'Include' : 'Exclude';
   for (const id of ['holdMinus', 'holdPlus', 'nudgeL', 'nudgeU', 'nudgeD', 'nudgeR', 'nudgeReset']) field(id).disabled = !has;
+  field('resetAllOffsets').disabled = !offsets.size;
   $('holdVal').textContent = has ? `${holdOf(selected!)}×` : '–';
-  const o = has ? offsets.get(selected!) || { dx: 0, dy: 0 } : null;
-  $('nudgeVal').textContent = o ? `${o.dx}, ${o.dy}` : '–';
+  const o = has ? offsetOf(selected!) : null;
+  $('nudgeVal').textContent = o ? `${o.dx > 0 ? '+' : ''}${o.dx}, ${o.dy > 0 ? '+' : ''}${o.dy}` : '–';
+  $('alignTag').textContent = has ? `Frame ${pos + 1} of ${order.length}` : '';
 }
 
 function currentFrame(): number | null {
@@ -172,9 +195,102 @@ function drawAnimFrame(): void {
   $('frameInfo').textContent = `Frame ${order.indexOf(idx) + 1} of ${order.length}` + (excluded.has(idx) ? ' · excluded' : '');
 }
 
+// ---------- align view ----------
+
+// The selected frame blown up, over a faint reference frame, with center lines.
+let alignView = { z: 1, ox: 0, oy: 0, dpr: 1 };
+
+function ghostFrame(): number | null {
+  if (selected === null) return null;
+  const mode = radio('ghost');
+  if (mode === 'first') return order[0] !== selected ? order[0] : null;
+  if (mode === 'prev') {
+    const p = order.indexOf(selected);
+    return order.length > 1 ? order[(p - 1 + order.length) % order.length] : null;
+  }
+  return null;
+}
+
+function drawAlign(): void {
+  const cv = $<HTMLCanvasElement>('alignCanvas');
+  const r = cv.getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  const dpr = window.devicePixelRatio || 1;
+  const cw = Math.round(r.width * dpr), ch = Math.round(r.height * dpr);
+  if (cv.width !== cw || cv.height !== ch) { cv.width = cw; cv.height = ch; }
+  const ctx = cv.getContext('2d')!;
+  ctx.clearRect(0, 0, cw, ch);
+  if (!anim || selected === null || !anim.W || !anim.H) return;
+  const { W, H } = anim;
+  const z = Math.max(1, Math.floor(Math.min((cw - 24 * dpr) / W, (ch - 24 * dpr) / H)));
+  const ox = Math.floor((cw - W * z) / 2), oy = Math.floor((ch - H * z) / 2);
+  alignView = { z, ox, oy, dpr };
+  ctx.imageSmoothingEnabled = false;
+
+  const ghost = ghostFrame();
+  if (ghost !== null) {
+    ctx.globalAlpha = 0.3;
+    ctx.drawImage(anim.canvases[ghost], ox, oy, W * z, H * z);
+    ctx.globalAlpha = 1;
+  }
+  ctx.drawImage(anim.canvases[selected], ox, oy, W * z, H * z);
+
+  if (z >= 6) {
+    ctx.strokeStyle = cssVar('--pixgrid');
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = 0; x <= W; x++) { ctx.moveTo(ox + x * z + 0.5, oy); ctx.lineTo(ox + x * z + 0.5, oy + H * z); }
+    for (let y = 0; y <= H; y++) { ctx.moveTo(ox, oy + y * z + 0.5); ctx.lineTo(ox + W * z, oy + y * z + 0.5); }
+    ctx.stroke();
+  }
+  // frame border and center lines
+  ctx.strokeStyle = cssVar('--muted');
+  ctx.lineWidth = Math.max(1, Math.round(dpr));
+  ctx.strokeRect(ox - 0.5, oy - 0.5, W * z + 1, H * z + 1);
+  ctx.strokeStyle = cssVar('--accent');
+  ctx.setLineDash([5 * dpr, 4 * dpr]);
+  ctx.beginPath();
+  const cx = Math.round(ox + (W / 2) * z) + 0.5, cy = Math.round(oy + (H / 2) * z) + 0.5;
+  ctx.moveTo(cx, oy - 8 * dpr); ctx.lineTo(cx, oy + H * z + 8 * dpr);
+  ctx.moveTo(ox - 8 * dpr, cy); ctx.lineTo(ox + W * z + 8 * dpr, cy);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+let alignDrag: { x: number; y: number; start: { dx: number; dy: number }; pointerId: number } | null = null;
+
+function initAlignView(): void {
+  const cv = $<HTMLCanvasElement>('alignCanvas');
+  new ResizeObserver(drawAlign).observe($('alignStage'));
+  cv.addEventListener('pointerdown', (e) => {
+    if (selected === null || e.button !== 0) return;
+    cv.setPointerCapture(e.pointerId);
+    cv.focus();
+    alignDrag = { x: e.clientX, y: e.clientY, start: offsetOf(selected), pointerId: e.pointerId };
+    $('alignStage').classList.add('dragging');
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (!alignDrag || e.pointerId !== alignDrag.pointerId || selected === null) return;
+    const step = alignView.z / alignView.dpr; // screen px per art pixel
+    const dx = alignDrag.start.dx + Math.round((e.clientX - alignDrag.x) / step);
+    const dy = alignDrag.start.dy + Math.round((e.clientY - alignDrag.y) / step);
+    const o = offsetOf(selected);
+    if (dx !== o.dx || dy !== o.dy) setOffset(selected, dx, dy);
+  });
+  const end = (e: PointerEvent) => {
+    if (!alignDrag || e.pointerId !== alignDrag.pointerId) return;
+    alignDrag = null;
+    $('alignStage').classList.remove('dragging');
+  };
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', end);
+  onAll('input[name="ghost"]', 'change', drawAlign);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawAlign);
+}
+
 // ---------- editing frames ----------
 
-function selectFrame(i: number): void { selected = i; setPlaying(false); renderAnim(); }
+function selectFrame(i: number): void { selected = i; renderAnim(); }
 function toggleExcluded(i: number): void { if (excluded.has(i)) excluded.delete(i); else excluded.add(i); renderAnim(); }
 
 function moveFrame(i: number, dir: number): void {
@@ -194,17 +310,30 @@ function reorder(i: number, target: number): void {
   renderAnim();
 }
 
-function nudge(i: number, dx: number, dy: number): void {
-  const o = offsets.get(i) || { dx: 0, dy: 0 };
-  offsets.set(i, { dx: o.dx + dx, dy: o.dy + dy });
+function setOffset(i: number, dx: number, dy: number): void {
+  if (dx || dy) offsets.set(i, { dx, dy });
+  else offsets.delete(i);
   selected = i;
-  setPlaying(false);
   renderAnim();
 }
+
+const nudge = (i: number, dx: number, dy: number) => { const o = offsetOf(i); setOffset(i, o.dx + dx, o.dy + dy); };
 
 function setHold(i: number, v: number): void {
   holds.set(i, Math.max(1, Math.min(16, v)));
   renderAnim();
+}
+
+const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+
+// On the animation step the arrow keys move the selected frame, unless a
+// control that uses them (sliders, radios, number fields) has the focus.
+function onKeyDown(e: KeyboardEvent): void {
+  const d = ARROWS[e.key];
+  if (!d || currentStep() !== 'frames' || selected === null || e.altKey || e.ctrlKey || e.metaKey) return;
+  if ((e.target as HTMLElement).matches?.('input, select, textarea')) return;
+  e.preventDefault();
+  nudge(selected, d[0], d[1]);
 }
 
 // ---------- playback ----------
@@ -221,14 +350,13 @@ function startIndex(): number {
 function setPlaying(value: boolean): void {
   playing = value;
   if (playing && ended) { animIndex = startIndex(); ended = false; animLast = 0; }
-  if (playing && selected !== null) {
-    // resume from the frame being viewed
+  else if (playing && selected !== null) {
+    // resume from the frame being looked at
     const act = activeFrames();
     if (act.includes(selected)) animIndex = act.indexOf(selected);
-    selected = null;
-    if (anim) renderAnim();
   }
   updatePlayLabel();
+  drawAnimFrame();
 }
 
 function tick(t: number): void {
@@ -370,7 +498,10 @@ async function downloadGif(): Promise<void> {
 
 export function initAnim(): void {
   onResult(renderAnim);
+  onStep((s) => { if (s === 'frames') drawAlign(); });
   initDrag();
+  initAlignView();
+  document.addEventListener('keydown', onKeyDown);
   field('animOn').addEventListener('change', renderAnim);
   onAll('input[name="splitMode"]', 'change', () => { syncSplit(); renderAnim(); });
   onAll('input[name="align"]', 'change', renderAnim);
@@ -389,11 +520,11 @@ export function initAnim(): void {
   $('selToggle').addEventListener('click', withSel(toggleExcluded));
   $('holdMinus').addEventListener('click', withSel((i) => setHold(i, holdOf(i) - 1)));
   $('holdPlus').addEventListener('click', withSel((i) => setHold(i, holdOf(i) + 1)));
-  $('nudgeL').addEventListener('click', withSel((i) => nudge(i, -1, 0)));
-  $('nudgeR').addEventListener('click', withSel((i) => nudge(i, 1, 0)));
-  $('nudgeU').addEventListener('click', withSel((i) => nudge(i, 0, -1)));
-  $('nudgeD').addEventListener('click', withSel((i) => nudge(i, 0, 1)));
-  $('nudgeReset').addEventListener('click', withSel((i) => { offsets.delete(i); renderAnim(); }));
+  for (const [id, key] of [['nudgeL', 'ArrowLeft'], ['nudgeR', 'ArrowRight'], ['nudgeU', 'ArrowUp'], ['nudgeD', 'ArrowDown']]) {
+    $(id).addEventListener('click', withSel((i) => nudge(i, ARROWS[key][0], ARROWS[key][1])));
+  }
+  $('nudgeReset').addEventListener('click', withSel((i) => setOffset(i, 0, 0)));
+  $('resetAllOffsets').addEventListener('click', () => { offsets = new Map(); renderAnim(); });
   $('dlStrip').addEventListener('click', downloadStrip);
   $('dlSheet').addEventListener('click', downloadSheet);
   $('dlZip').addEventListener('click', downloadFramesZip);

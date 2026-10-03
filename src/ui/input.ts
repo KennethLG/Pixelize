@@ -30,7 +30,7 @@ function load(drawable: CanvasImageSource & { width: number; height: number }, n
   const src = imageToData(drawable);
   $('srcTag').textContent = isSample ? 'Sample' : '';
   $('srcName').textContent = isSample
-    ? 'Loaded: generated sample (a 4-frame lantern spritesheet blown up to ~16 px per pixel, with noise).'
+    ? 'Loaded the sample: a 4-frame lantern spritesheet blown up to about 16 px per pixel, with noise.'
     : `Loaded: ${name}`;
   const maxCell = String(Math.max(8, Math.floor(Math.min(src.w, src.h) / 4)));
   field('cellXr').max = maxCell;
@@ -58,6 +58,7 @@ export const loadSample = () => load(sampleCanvas(), 'lantern', true);
 export function initInput(): void {
   const drop = $('drop'), file = field('file');
   drop.addEventListener('click', () => file.click());
+  $('sampleBtn').addEventListener('click', loadSample);
   drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.click(); } });
   file.addEventListener('change', () => { loadFile(file.files?.[0]); file.value = ''; });
   for (const t of ['dragenter', 'dragover']) drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); });
