@@ -9,7 +9,8 @@
     "build": "tsc && vite build && node scripts/postbuild.mjs",
     "test": "vitest run",
     "typecheck": "tsc",
-    "cli": "tsx cli/pixelize.ts"
+    "cli": "tsx cli/pixelize.ts",
+    "image": "node cli/generate-image.mjs"
   },
   "dependencies": {
     "sharp": "^0.33.5"

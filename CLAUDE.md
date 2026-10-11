@@ -7,6 +7,7 @@ Pixelize converts fake AI pixel art into real pixel art. Vite + TypeScript, no f
 - `npm test`: Vitest on the core. Run it after any change in `src/core/` or `src/export/`.
 - `npm run build`: `tsc`, then Vite bundles everything (CSS, JS and the inline worker) into `dist/pixelize.html`.
 - `npm run cli -- <image> [options]`: the terminal tool (runs `cli/pixelize.ts` with tsx).
+- `npm run image -- "<prompt>" [options]`: generates images with the OpenAI Images API (`cli/generate-image.mjs`, plain Node, needs `OPENAI_API_KEY`; `--help` lists the options). Output goes to `generated/` (git-ignored) unless `--out` says otherwise.
 
 ## Rules
 
