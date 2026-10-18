@@ -11,7 +11,7 @@ import { useReorder } from '../../components/useReorder';
 function paint(c: HTMLCanvasElement, fi: number): void {
   const { w, h } = sp.doc;
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
-  c.getContext('2d')!.putImageData(new ImageData(composite(sp.doc, fi), w, h), 0, 0);
+  c.getContext('2d')!.putImageData(new ImageData(composite(sp.doc, fi, null, { refs: false }), w, h), 0, 0);
 }
 
 /** One frame's picture. `stamp` changes whenever the frame needs repainting. */

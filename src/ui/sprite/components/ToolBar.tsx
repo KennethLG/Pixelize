@@ -11,6 +11,7 @@ export const TOOLS: ToolDef[][] = [
   [
     { tool: 'pencil', name: 'Pencil', key: 'B', help: 'Right click: secondary color. Shift+click: straight line. Alt+click: pick a color.' },
     { tool: 'eraser', name: 'Eraser', key: 'E' },
+    { tool: 'line', name: 'Line', key: 'L', help: 'Shift: straight or 45°.' },
     { tool: 'bucket', name: 'Paint bucket', key: 'G' },
     { tool: 'rect', name: 'Rectangle', key: 'U', help: 'Shift: square.' },
     { tool: 'ellipse', name: 'Ellipse', key: 'O', help: 'Shift: circle.' },

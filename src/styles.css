@@ -426,3 +426,7 @@ body[data-mode="sprite"] .wrap { max-width: 1800px; }
 .colorpick-panel { display: flex; flex-direction: column; gap: 6px; }
 .colorpick-panel .row code { margin-left: auto; }
 .frame-pic { display: contents; }
+
+/* sprite editor: symmetry toggles and reference layers */
+.sp-sym { width: 30px; padding: 3px 0; text-align: center; font-size: 14px; }
+.sp-reftag { padding: 0 5px; font: 700 10px var(--font-mono); letter-spacing: .06em; border-radius: 4px; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }

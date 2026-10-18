@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   blit, boxOf, clearMasked, colorMask, combineMasks, drawEllipse, drawLine, drawRect, extract, fill, flip, floatingMask,
-  getPixel, maskBounds, newBitmap, rectMask, replaceColor, scaleNearest, stamp, type Bitmap,
+  getPixel, isLCorner, maskBounds, newBitmap, outline, pixelPerfect, plot, rectMask, replaceColor, rotate90, scaleNearest,
+  snapAngle, stamp, type Bitmap,
 } from '../src/core/bitmap';
 import {
   addFrame, addLayer, composite, createDoc, cropCanvas, duplicateFrame, mergeDown, moveFrame, moveLayer, parseDoc,
@@ -72,6 +73,85 @@ describe('drawing', () => {
     const b = newBitmap(10, 10);
     drawRect(b, boxOf(0, 0, 9, 9), true, 1, RED, rectMask(10, 10, { x: 0, y: 0, w: 5, h: 10 }));
     expect(count(b)).toBe(50);
+  });
+});
+
+describe('symmetry, tile mode, lines', () => {
+  it('mirrors land on the other side of the center', () => {
+    const b = newBitmap(5, 4);
+    plot(b, 0, 0, RED, { symX: true, symY: true });
+    expect([getPixel(b, 0, 0), getPixel(b, 4, 0), getPixel(b, 0, 3), getPixel(b, 4, 3)].every((c) => c[3] === 255)).toBe(true);
+    expect(count(b)).toBe(4);
+  });
+
+  it('a mirrored brush stays symmetric', () => {
+    const b = newBitmap(8, 8);
+    stamp(b, 1, 1, 2, RED, { symX: true });
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) expect(getPixel(b, x, y)[3]).toBe(getPixel(b, 7 - x, y)[3]);
+  });
+
+  it('symmetry still respects the selection', () => {
+    const b = newBitmap(4, 1);
+    plot(b, 0, 0, RED, { symX: true, mask: rectMask(4, 1, { x: 0, y: 0, w: 2, h: 1 }) });
+    expect(count(b)).toBe(1);
+  });
+
+  it('tile mode wraps strokes around the edges', () => {
+    const b = newBitmap(4, 4);
+    drawLine(b, 2, 1, 5, 1, 1, RED, { wrap: true });
+    expect([0, 1, 2, 3].map((x) => getPixel(b, x, 1)[3])).toEqual([255, 255, 255, 255]);
+    plot(b, -1, -1, BLUE, { wrap: true });
+    expect(getPixel(b, 3, 3)).toEqual(BLUE);
+  });
+
+  it('Shift snaps lines to straight or 45°', () => {
+    expect(snapAngle(0, 0, 9, 2)).toEqual([9, 0]);
+    expect(snapAngle(0, 0, 1, 8)).toEqual([0, 8]);
+    expect(snapAngle(0, 0, 5, -4)).toEqual([5, -5]);
+  });
+
+  it('pixel perfect drops the corners of L shapes', () => {
+    expect(isLCorner([0, 0], [1, 0], [1, 1])).toBe(true);
+    expect(isLCorner([0, 0], [1, 0], [2, 0])).toBe(false);
+    // a staircase drawn by hand: right, down, right, down
+    const path: [number, number][] = [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2], [2, 2]];
+    expect(pixelPerfect(path)).toEqual([[0, 0], [1, 1], [2, 2]]);
+    // straight lines are untouched
+    expect(pixelPerfect([[0, 0], [1, 0], [2, 0]])).toHaveLength(3);
+  });
+});
+
+describe('rotate and outline', () => {
+  it('a quarter turn swaps the size and moves the corners', () => {
+    const b = newBitmap(3, 2);
+    b.px.set(RED, 0);              // top left
+    const cw = rotate90(b, true);
+    expect([cw.w, cw.h]).toEqual([2, 3]);
+    expect(getPixel(cw, 1, 0)).toEqual(RED); // top right
+    const ccw = rotate90(b, false);
+    expect(getPixel(ccw, 0, 2)).toEqual(RED); // bottom left
+    expect([...rotate90(rotate90(cw, false), true).px]).toEqual([...cw.px]);
+  });
+
+  it('outline paints the empty pixels around the art', () => {
+    const b = newBitmap(5, 5);
+    plot(b, 2, 2, RED);
+    expect(outline(b, BLUE, false)).toBe(4);
+    expect(getPixel(b, 2, 1)).toEqual(BLUE);
+    expect(getPixel(b, 1, 1)[3]).toBe(0);
+    const c = newBitmap(5, 5);
+    plot(c, 2, 2, RED);
+    expect(outline(c, BLUE, true)).toBe(8);
+    expect(getPixel(c, 2, 2)).toEqual(RED);
+  });
+
+  it('with a selection only the selected art gets an outline', () => {
+    const b = newBitmap(7, 3);
+    plot(b, 1, 1, RED);
+    plot(b, 5, 1, RED);
+    outline(b, BLUE, false, rectMask(7, 3, { x: 0, y: 0, w: 3, h: 3 }));
+    expect(getPixel(b, 1, 0)).toEqual(BLUE);
+    expect(getPixel(b, 5, 0)[3]).toBe(0);
   });
 });
 
@@ -222,6 +302,18 @@ describe('sprite document', () => {
     expect(d.frames.every((f) => f.cels.every((c) => c.w === 4 && c.h === 2))).toBe(true);
     expect(getPixel(d.frames[1].cels[1], 3, 1)).toEqual(BLUE);
     expect(getPixel(d.frames[1].cels[1], 1, 1)[3]).toBe(0);
+  });
+
+  it('reference layers show while drawing but not in exports or colors in use', () => {
+    const d = createDoc(2, 1);
+    addLayer(d, 1);
+    d.layers[1].ref = true;
+    stamp(d.frames[0].cels[1], 0, 0, 1, BLUE);
+    expect([...composite(d, 0).slice(0, 4)]).toEqual(BLUE);
+    expect(composite(d, 0, null, { refs: false })[3]).toBe(0);
+    expect(usedColors(d)).toEqual([]);
+    expect(parseDoc(serializeDoc(d))!.layers[1].ref).toBe(true);
+    expect(parseDoc(serializeDoc(d))!.layers[0].ref).toBeUndefined();
   });
 
   it('colors in use and saving round trip', () => {

@@ -6,7 +6,7 @@ import { togglePlay } from './components/Timeline';
 import { copy, cut } from './io';
 import { commitFloating, deselect, redo, setFrame, setTool, sp, undo, type Tool } from './state';
 
-const KEYS: Record<string, Tool> = { h: 'pan', b: 'pencil', e: 'eraser', g: 'bucket', i: 'picker', u: 'rect', o: 'ellipse', m: 'select', w: 'wand', v: 'move', c: 'canvas' };
+const KEYS: Record<string, Tool> = { h: 'pan', b: 'pencil', e: 'eraser', l: 'line', g: 'bucket', i: 'picker', u: 'rect', o: 'ellipse', m: 'select', w: 'wand', v: 'move', c: 'canvas' };
 const ARROWS: Record<string, [number, number]> = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1] };
 
 function onKeyDown(e: KeyboardEvent): void {

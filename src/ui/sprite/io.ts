@@ -23,7 +23,7 @@ function frameCanvas(fi: number, scale = 1): HTMLCanvasElement {
   const { w, h } = sp.doc;
   const src = document.createElement('canvas');
   src.width = w; src.height = h;
-  src.getContext('2d')!.putImageData(new ImageData(composite(sp.doc, fi), w, h), 0, 0);
+  src.getContext('2d')!.putImageData(new ImageData(composite(sp.doc, fi, null, { refs: false }), w, h), 0, 0);
   if (scale === 1) return src;
   const c = document.createElement('canvas');
   c.width = w * scale; c.height = h * scale;
@@ -132,7 +132,7 @@ export async function exportGif(scale: number): Promise<void> {
   commitFloating();
   setStatus('Encoding GIF…');
   await wait(20);
-  const frames = sp.doc.frames.map((_, i) => composite(sp.doc, i));
+  const frames = sp.doc.frames.map((_, i) => composite(sp.doc, i, null, { refs: false }));
   const bytes = encodeGif(frames, sp.doc.w, sp.doc.h, clampScale(scale), sp.doc.frames.map((f) => f.duration / 10), true);
   await saveBlob(new Blob([bytes], { type: 'image/gif' }), `${sp.name}.gif`);
 }

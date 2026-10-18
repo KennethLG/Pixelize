@@ -4,8 +4,8 @@
 // CanvasPanel component hands it its elements with attachCanvas().
 
 import {
-  boxOf, colorMask, combineMasks, drawEllipse, drawLine, drawRect, fill, getPixel, maskBounds, rectMask, replaceColor,
-  type Box, type MaskOp,
+  boxOf, colorMask, combineMasks, drawEllipse, drawLine, drawRect, fill, getPixel, isLCorner, linePoints, maskBounds,
+  paintPoints, rectMask, replaceColor, snapAngle, stamp, type Bitmap, type Box, type MaskOp, type PaintOpts,
 } from '../../core/bitmap';
 import { hex, type RGBA } from '../../core/color';
 import { cloneDoc, composite, cropCanvas, scaleDoc, type SpriteDoc } from '../../core/sprite';
@@ -88,6 +88,14 @@ function lineAt(e: { clientX: number; clientY: number }): Pt {
   return { x: Math.round((e.clientX - r.left - view.ox) / view.zoom), y: Math.round((e.clientY - r.top - view.oy) / view.zoom) };
 }
 const inside = (p: Pt) => p.x >= 0 && p.y >= 0 && p.x < sp.doc.w && p.y < sp.doc.h;
+const mod = (v: number, n: number) => ((v % n) + n) % n;
+/** In tile mode the 3 × 3 copies around the canvas count too. */
+const onTiles = (p: Pt) => sp.tileMode && p.x >= -sp.doc.w && p.y >= -sp.doc.h && p.x < 2 * sp.doc.w && p.y < 2 * sp.doc.h;
+/** The canvas pixel a point stands for (the same point, or wrapped in tile mode). */
+const toCanvas = (p: Pt): Pt => (onTiles(p) ? { x: mod(p.x, sp.doc.w), y: mod(p.y, sp.doc.h) } : p);
+/** How the drawing tools paint right now. */
+const paintOpts = (): PaintOpts => ({ mask: sp.mask, symX: sp.symX, symY: sp.symY, wrap: sp.tileMode });
+const DRAW_TOOLS = ['pencil', 'eraser', 'line', 'rect', 'ellipse'];
 
 /** The middle of what is on screen, in sprite pixels (where pastes land). */
 export function viewCenter(): Pt {
@@ -141,15 +149,20 @@ export function draw(): void {
   const { zoom: z, ox, oy } = view;
   const W = w * z, H = h * z;
 
+  // in tile mode the eight neighbours repeat the canvas, a little dimmed
+  const tiles: [number, number][] = sp.tileMode
+    ? [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]
+    : [];
   ctx.save();
   ctx.translate(ox, oy);
   ctx.fillStyle = sp.paperMode === 'color' ? hex(sp.paperColor) : checkerPattern(ctx);
   ctx.fillRect(0, 0, W, H);
+  for (const [tx, ty] of tiles) ctx.fillRect(tx * W, ty * H, W, H);
   ctx.restore();
   ctx.imageSmoothingEnabled = false;
 
   if (sp.onion && sp.frame > 0) {
-    putImage(onionCanvas, composite(sp.doc, sp.frame - 1), w, h);
+    putImage(onionCanvas, composite(sp.doc, sp.frame - 1, null, { refs: false }), w, h);
     ctx.globalAlpha = 0.3;
     ctx.drawImage(onionCanvas, ox, oy, W, H);
     ctx.globalAlpha = 1;
@@ -158,6 +171,11 @@ export function draw(): void {
   const layer = sp.floating ? sp.floating.layer : sp.layer;
   putImage(art, composite(sp.doc, sp.frame, live ? { layer, cel: live } : undefined), w, h);
   ctx.drawImage(art, ox, oy, W, H);
+  if (tiles.length) {
+    for (const [tx, ty] of tiles) ctx.drawImage(art, ox + tx * W, oy + ty * H, W, H);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    for (const [tx, ty] of tiles) ctx.fillRect(ox + tx * W, oy + ty * H, W, H);
+  }
 
   if (sp.showGrid) {
     const lines = (sx: number, sy: number) => {
@@ -174,10 +192,23 @@ export function draw(): void {
   ctx.strokeStyle = cssVar('--line');
   ctx.strokeRect(ox - 0.5, oy - 0.5, W + 1, H + 1);
 
+  // the symmetry axes, while a drawing tool is on
+  if ((sp.symX || sp.symY) && DRAW_TOOLS.includes(sp.tool)) {
+    ctx.save();
+    ctx.strokeStyle = cssVar('--accent');
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    if (sp.symX) { const X = Math.round(ox + W / 2) + 0.5; ctx.moveTo(X, oy - 6); ctx.lineTo(X, oy + H + 6); }
+    if (sp.symY) { const Y = Math.round(oy + H / 2) + 0.5; ctx.moveTo(ox - 6, Y); ctx.lineTo(ox + W + 6, Y); }
+    ctx.stroke();
+    ctx.restore();
+  }
+
   drawSelection(ctx);
   if (sp.tool === 'canvas') drawCanvasHandles(ctx);
 
-  if (hover && !spaceHeld && inside(hover) && ['pencil', 'eraser', 'rect', 'ellipse'].includes(sp.tool) && !gesture) {
+  if (hover && !spaceHeld && (inside(hover) || onTiles(hover)) && DRAW_TOOLS.includes(sp.tool) && !gesture) {
     const o = Math.floor((sp.brush - 1) / 2);
     ctx.strokeStyle = cssVar('--accent');
     ctx.lineWidth = 1.5;
@@ -260,8 +291,9 @@ function drawCanvasHandles(ctx: CanvasRenderingContext2D): void {
 
 type Gesture =
   | { type: 'pan'; x: number; y: number }
-  | { type: 'paint'; color: RGBA; last: Pt; before: Uint8ClampedArray }
-  | { type: 'rect'; shape: 'rect' | 'ellipse'; color: RGBA; start: Pt; end: Pt }
+  // `path` keeps the pixels of a pixel-perfect stroke, to take back L-shaped corners
+  | { type: 'paint'; color: RGBA; last: Pt; before: Uint8ClampedArray; perfect: boolean; path: [number, number][] }
+  | { type: 'rect'; shape: 'rect' | 'ellipse' | 'line'; color: RGBA; start: Pt; end: Pt }
   | { type: 'marquee'; start: Pt; end: Pt; op: MaskOp }
   // the pixels are only lifted once the pointer really moves, so a click stays a click
   | { type: 'move'; start: Pt; fx: number; fy: number; lifted: boolean; tool: Tool }
@@ -290,6 +322,7 @@ function handleAt(e: PointerEvent): Handle | null {
 }
 
 function pickColor(p: Pt, slot: 'primary' | 'secondary'): void {
+  p = toCanvas(p);
   if (!inside(p)) return;
   const px = composite(sp.doc, sp.frame);
   const i = (p.y * sp.doc.w + p.x) * 4;
@@ -298,6 +331,15 @@ function pickColor(p: Pt, slot: 'primary' | 'secondary'): void {
 
 function rectPreview(g: Extract<Gesture, { type: 'rect' }>, square: boolean): void {
   let { x, y } = g.end;
+  if (g.shape === 'line') {
+    // Shift: straight or 45°
+    if (square) [x, y] = snapAngle(g.start.x, g.start.y, x, y);
+    const c = cel();
+    const out = { w: c.w, h: c.h, px: c.px.slice() };
+    drawLine(out, g.start.x, g.start.y, x, y, sp.brush, g.color, paintOpts());
+    sp.preview = out;
+    return;
+  }
   if (square) {
     const d = Math.max(Math.abs(x - g.start.x), Math.abs(y - g.start.y));
     x = g.start.x + Math.sign(x - g.start.x || 1) * d;
@@ -306,13 +348,41 @@ function rectPreview(g: Extract<Gesture, { type: 'rect' }>, square: boolean): vo
   const c = cel();
   const out = { w: c.w, h: c.h, px: c.px.slice() };
   const box = boxOf(g.start.x, g.start.y, x, y);
-  if (g.shape === 'ellipse') drawEllipse(out, box, sp.rectFilled, sp.brush, g.color, sp.mask);
-  else drawRect(out, box, sp.rectFilled, sp.brush, g.color, sp.mask);
+  if (g.shape === 'ellipse') drawEllipse(out, box, sp.rectFilled, sp.brush, g.color, paintOpts());
+  else drawRect(out, box, sp.rectFilled, sp.brush, g.color, paintOpts());
   sp.preview = out;
+}
+
+/** Puts back what was under a pixel (and its mirrors) before the stroke. */
+function restorePixel(c: Bitmap, before: Uint8ClampedArray, x: number, y: number, o: PaintOpts): void {
+  for (const [px, py] of paintPoints(c.w, c.h, x, y, o)) {
+    if (px < 0 || py < 0 || px >= c.w || py >= c.h) continue;
+    const i = (py * c.w + px) * 4;
+    c.px.set(before.subarray(i, i + 4), i);
+  }
+}
+
+/** Adds one pixel to a freehand stroke; pixel-perfect strokes take back the corner of an L. */
+function strokePoint(g: Extract<Gesture, { type: 'paint' }>, x: number, y: number): void {
+  const c = cel(), o = paintOpts();
+  if (g.perfect) {
+    const n = g.path.length, last = g.path[n - 1];
+    if (last && last[0] === x && last[1] === y) return;
+    if (n >= 2 && isLCorner(g.path[n - 2], last, [x, y])) { restorePixel(c, g.before, last[0], last[1], o); g.path.pop(); }
+    g.path.push([x, y]);
+  }
+  stamp(c, x, y, sp.brush, g.color, o);
+}
+
+function strokeTo(g: Extract<Gesture, { type: 'paint' }>, p: Pt): void {
+  for (const [x, y] of linePoints(g.last.x, g.last.y, p.x, p.y).slice(1)) strokePoint(g, x, y);
+  g.last = p;
+  lastPaint = p;
 }
 
 /** Bucket: fills the area under the pointer, or replaces its color (in this frame or in all of them). */
 function bucket(p: Pt, color: RGBA): void {
+  p = toCanvas(p);
   if (!inside(p)) return;
   if (sp.bucketMode === 'fill') {
     const c = cel(), before = c.px.slice();
@@ -365,7 +435,7 @@ function onPointerDown(e: PointerEvent): void {
     return;
   }
   if (e.button !== 0 && e.button !== 2) return;
-  const tool: Tool = e.altKey && ['pencil', 'bucket', 'rect', 'ellipse'].includes(sp.tool) ? 'picker' : sp.tool;
+  const tool: Tool = e.altKey && ['pencil', 'bucket', 'line', 'rect', 'ellipse'].includes(sp.tool) ? 'picker' : sp.tool;
   if (tool === 'canvas') {
     const handle = e.button === 0 ? handleAt(e) : null;
     if (handle) gesture = { type: 'canvas', handle, orig: cloneDoc(sp.doc), ox0: view.ox, oy0: view.oy, changed: false };
@@ -377,16 +447,21 @@ function onPointerDown(e: PointerEvent): void {
 
   if (tool === 'pencil' || tool === 'eraser') {
     const color: RGBA = tool === 'eraser' ? [0, 0, 0, 0] : colorFor(e);
-    const c = cel(), before = c.px.slice();
+    const g: Extract<Gesture, { type: 'paint' }> = {
+      type: 'paint', color, last: p, before: cel().px.slice(), path: [],
+      perfect: tool === 'pencil' && sp.pixelPerfect && sp.brush === 1,
+    };
+    // Shift+click: a straight line from where the last stroke ended
     const from = e.shiftKey && lastPaint ? lastPaint : p;
-    drawLine(c, from.x, from.y, p.x, p.y, sp.brush, color, sp.mask);
-    gesture = { type: 'paint', color, last: p, before };
-    lastPaint = p;
+    strokePoint(g, from.x, from.y);
+    g.last = from;
+    strokeTo(g, p);
+    gesture = g;
     draw();
     return;
   }
   if (tool === 'bucket') { bucket(p, colorFor(e)); return; }
-  if (tool === 'rect' || tool === 'ellipse') {
+  if (tool === 'rect' || tool === 'ellipse' || tool === 'line') {
     gesture = { type: 'rect', shape: tool, color: colorFor(e), start: p, end: p };
     rectPreview(gesture, e.shiftKey);
     draw();
@@ -422,9 +497,7 @@ function onPointerMove(e: PointerEvent): void {
     viewTouched = true;
   } else if (g.type === 'paint') {
     if (p.x === g.last.x && p.y === g.last.y) return;
-    drawLine(cel(), g.last.x, g.last.y, p.x, p.y, sp.brush, g.color, sp.mask);
-    g.last = p;
-    lastPaint = p;
+    strokeTo(g, p);
   } else if (g.type === 'rect') {
     g.end = p;
     rectPreview(g, e.shiftKey);
@@ -463,6 +536,7 @@ function onPointerMove(e: PointerEvent): void {
 let marqueeBase: Uint8Array | null = null;
 
 function wandAt(p: Pt, op: MaskOp): void {
+  p = toCanvas(p);
   if (!inside(p)) { deselect(); return; }
   sp.mask = combineMasks(sp.mask, colorMask(cel(), p.x, p.y, sp.contiguous), op);
   if (!sp.mask.some((v) => v)) sp.mask = null;
@@ -535,6 +609,7 @@ function updateCursor(e?: PointerEvent): void {
 
 function updateCursorInfo(p: Pt | null): void {
   let text = '';
+  if (p && onTiles(p)) p = toCanvas(p);
   if (p && inside(p)) {
     const [r, g, b, a] = getPixel(sp.preview ?? cel(), p.x, p.y);
     text = `${p.x}, ${p.y}` + (a ? `  #${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}` : '');

@@ -53,15 +53,17 @@ The page walks through seven steps: Image, Pixels, Colors, Background & crop, To
 
 ### Sprite editor
 
-- **Tools:** pencil and eraser with a brush size, paint bucket (fill an area, or replace a color on the layer in this frame or in every frame), rectangle and ellipse (outline or filled, Shift for squares and circles), eyedropper. Left click draws with the primary color, right click with the secondary one; Shift+click draws a straight line, Alt+click picks a color.
+- **Tools:** pencil and eraser with a brush size (the pencil can be "pixel perfect": no L-shaped corners in freehand strokes), line (Shift for straight or 45°), paint bucket (fill an area, or replace a color on the layer in this frame or in every frame), rectangle and ellipse (outline or filled, Shift for squares and circles), eyedropper.
+- **Symmetry and tiles:** mirror the drawing tools left/right and top/bottom across the canvas center. Tile mode shows 3 × 3 copies of the canvas and wraps strokes around the edges, for seamless tiles.
+- **Outline:** one click outlines the art on the layer (or the selected art) with the primary color; Shift+click also fills the diagonal corners. Left click draws with the primary color, right click with the secondary one; Shift+click draws a straight line, Alt+click picks a color.
 - **Canvas size:** with the Canvas tool, drag the squares on the edges of the paper to resize it live, either keeping the art's pixel size (adding or cutting space on that side) or stretching the art with it. The size fields in the top bar do the same, keeping the art centered.
-- **Selections:** rectangle select and select by color (Shift adds, Alt subtracts). Drag a selection to move it, drag its squares to resize it (Shift keeps the proportions), or use ×2, ½ and the flips. Cut, copy and paste, also with images from other apps.
+- **Selections:** rectangle select and select by color (Shift adds, Alt subtracts). Drag a selection to move it, drag its squares to resize it (Shift keeps the proportions), or use ×2, ½, the flips and the quarter and half turns. Cut, copy and paste, also with images from other apps.
 - **Colors:** an in-app color picker with hex input, the colors used in the sprite, and your own palette (add colors, or load a Lospec .hex, .gpl or PNG palette).
-- **Layers:** add, duplicate, delete, merge down, hide, rename (double click), opacity, and drag to reorder.
+- **Layers:** add, duplicate, delete, merge down, hide, rename (double click), opacity, and drag to reorder. "Ref" adds an image as a reference layer: it shows (half transparent) while you draw but is left out of the exports, thumbnails and colors in use.
 - **Frames:** add, duplicate, delete, per-frame duration, drag to reorder, onion skin and a live preview.
 - **Paper and grid:** draw over a checkerboard or a flat color (picked with the app's color picker; only for viewing, exports keep transparency), with the pixel grid and an optional bigger grid (for example 16 × 16 tiles). The editor fills the window, with the tools as icons on the left.
 - **Files:** open a PNG (a `_stripN.png` opens as N frames) or a `.pixelize` project, save the project, export the frame as PNG, all frames as a GameMaker strip, or a GIF. The last sprite is kept in the browser. "Edit in the sprite editor" on the Pixelize Export step sends the result (or its animation frames) over.
 
-Sprite editor shortcuts: B pencil, E eraser, G bucket, U rectangle, O ellipse, I eyedropper, M select, W select by color, V move, C canvas size, H hand, X swap colors, [ ] brush size, Ctrl+A/D select all/none, Ctrl+C/X/V, Delete, Enter puts a moved selection down, Esc deselects, arrow keys nudge the selection, , and . previous/next frame, P play.
+Sprite editor shortcuts: B pencil, E eraser, L line, G bucket, U rectangle, O ellipse, I eyedropper, M select, W select by color, V move, C canvas size, H hand, X swap colors, [ ] brush size, Ctrl+A/D select all/none, Ctrl+C/X/V, Delete, Enter puts a moved selection down, Esc deselects, arrow keys nudge the selection, , and . previous/next frame, P play.
 
 Pixelize shortcuts: H move, B pencil, E eraser, G fill, I eyedropper (Touch up step), +/− zoom, 0 fit, Space drag to pan, Ctrl+Z / Ctrl+Y undo/redo, arrow keys move the selected frame (Animation step).

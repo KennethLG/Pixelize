@@ -22,7 +22,7 @@ import { cloneDoc, createDoc, type SpriteDoc } from '../../core/sprite';
 import { createBus } from '../bus';
 
 export type SpEvent = 'pixels' | 'structure' | 'cursor' | 'selection' | 'color' | 'tool' | 'paper' | 'view' | 'hover' | 'palette' | 'playback';
-export type Tool = 'pan' | 'pencil' | 'eraser' | 'bucket' | 'picker' | 'rect' | 'ellipse' | 'select' | 'wand' | 'move' | 'canvas';
+export type Tool = 'pan' | 'pencil' | 'eraser' | 'line' | 'bucket' | 'picker' | 'rect' | 'ellipse' | 'select' | 'wand' | 'move' | 'canvas';
 
 /** A floating piece also remembers its layer, frame, and the cel before it was lifted (for undo). */
 export interface Float extends Floating { frame: number; layer: number; before: Uint8ClampedArray }
@@ -38,6 +38,13 @@ export const sp = {
   tool: 'pencil' as Tool,
   brush: 1,
   rectFilled: false,       // rectangles and ellipses
+  /** pencil strokes without L-shaped corners (1 px brush) */
+  pixelPerfect: false,
+  /** drawing is mirrored across the canvas center: left/right and top/bottom */
+  symX: false,
+  symY: false,
+  /** the canvas shows 3 × 3 copies and strokes wrap around the edges, for tiles */
+  tileMode: false,
   contiguous: true,        // select by color
   bucketMode: 'fill' as 'fill' | 'replace',
   replaceAllFrames: false,

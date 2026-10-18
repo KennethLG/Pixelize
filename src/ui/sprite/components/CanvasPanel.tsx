@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, type CSSProperties } from 'react';
 import { hex } from '../../../core/color';
-import { pickSlot, setPaperMode } from '../actions';
+import { pickSlot, setPaperMode, setTileMode } from '../actions';
 import { attachCanvas, fitView, hoverText, zoomPercent, zoomStep } from '../canvas';
 import { useSp } from '../hooks';
 import { clampGrid } from '../prefs';
@@ -39,6 +39,7 @@ export function CanvasPanel() {
           <span className="muted">×</span>
           <NumberField id="spGridH" value={sp.gridH} min={1} max={512} label="Grid cell height" title="Grid cell size in pixels (1 = every pixel)" onCommit={(v) => setGrid({ gridH: clampGrid(v) })} live />
           <label className="check"><input type="checkbox" checked={sp.onion} onChange={(e) => { sp.onion = e.target.checked; emit('view'); }} />Onion skin</label>
+          <label className="check" title="Show 3 × 3 copies of the canvas; strokes wrap around the edges, for seamless tiles"><input type="checkbox" checked={sp.tileMode} onChange={(e) => setTileMode(e.target.checked)} />Tile</label>
         </div>
         <div className="group" role="group" aria-label="Paper">
           <span className="muted">Paper</span>

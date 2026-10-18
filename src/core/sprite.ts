@@ -3,7 +3,8 @@
 
 import { newBitmap, scaleNearest, type Bitmap } from './bitmap';
 
-export interface Layer { name: string; visible: boolean; opacity: number }
+/** A reference layer is shown while drawing but left out of exports and of the colors in use. */
+export interface Layer { name: string; visible: boolean; opacity: number; ref?: boolean }
 export interface Frame { cels: Bitmap[]; duration: number }
 export interface SpriteDoc { w: number; h: number; layers: Layer[]; frames: Frame[] }
 
@@ -139,12 +140,13 @@ export function blendOver(dst: Uint8ClampedArray, src: Uint8ClampedArray, opacit
 /**
  * The visible image of frame `fi`. `override` swaps one layer's cel for
  * another bitmap (the editor uses it to show a selection being moved).
+ * Exports pass `refs: false` to leave reference layers out.
  */
-export function composite(d: SpriteDoc, fi: number, override?: { layer: number; cel: Bitmap }): Uint8ClampedArray {
+export function composite(d: SpriteDoc, fi: number, override?: { layer: number; cel: Bitmap } | null, opts: { refs?: boolean } = {}): Uint8ClampedArray {
   const out = new Uint8ClampedArray(d.w * d.h * 4);
   const f = d.frames[fi];
   d.layers.forEach((l, li) => {
-    if (!l.visible || l.opacity <= 0) return;
+    if (!l.visible || l.opacity <= 0 || (l.ref && opts.refs === false)) return;
     const cel = override && override.layer === li ? override.cel : f.cels[li];
     blendOver(out, cel.px, l.opacity);
   });
@@ -155,7 +157,8 @@ export function composite(d: SpriteDoc, fi: number, override?: { layer: number; 
 export function usedColors(d: SpriteDoc): number[] {
   const counts = new Map<number, number>();
   for (const f of d.frames) {
-    for (const c of f.cels) {
+    for (const [li, c] of f.cels.entries()) {
+      if (d.layers[li]?.ref) continue;
       const px = c.px;
       for (let i = 0; i < px.length; i += 4) {
         if (px[i + 3] < 128) continue;
@@ -195,7 +198,7 @@ export function parseDoc(text: string): SpriteDoc | null {
         return { w: s.w, h: s.h, px: px.length === size ? px : new Uint8ClampedArray(size) };
       }),
     }));
-    return { w: s.w, h: s.h, layers: s.layers.map((l) => ({ name: String(l.name), visible: l.visible !== false, opacity: Number.isFinite(+l.opacity) ? Math.max(0, Math.min(1, +l.opacity)) : 1 })), frames };
+    return { w: s.w, h: s.h, layers: s.layers.map((l) => ({ name: String(l.name), visible: l.visible !== false, opacity: Number.isFinite(+l.opacity) ? Math.max(0, Math.min(1, +l.opacity)) : 1, ...(l.ref ? { ref: true } : {}) })), frames };
   } catch {
     return null;
   }

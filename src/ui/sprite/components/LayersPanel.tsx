@@ -4,6 +4,8 @@
 import { useRef, useState } from 'react';
 import { addLayer, duplicateLayer, mergeDown, moveLayer, removeLayer } from '../../../core/sprite';
 import { useSp } from '../hooks';
+import { addReferenceImage, toggleReference } from '../actions';
+import { setStatus } from '../../dom';
 import { emit, pushDoc, setLayer, sp } from '../state';
 import { useReorder } from '../../components/useReorder';
 
@@ -44,6 +46,7 @@ export function LayersPanel() {
   useSp('structure', 'cursor', 'pixels');
   const [renaming, setRenaming] = useState<number | null>(null);
   const sliding = useRef(false);
+  const refFile = useRef<HTMLInputElement>(null);
   // the list shows the top layer first, so dropping "before" an item means above it: a higher index
   const { itemProps, marks } = useReorder('y', (from, over, before) => {
     let to = before ? over + 1 : over;
@@ -66,8 +69,11 @@ export function LayersPanel() {
           <button type="button" className="ghost small" title="Move down" aria-label="Move layer down" disabled={sp.layer < 1} onClick={() => moveTo(sp.layer, sp.layer - 1)}>↓</button>
           <button type="button" className="ghost small" title="Merge into the layer below" disabled={sp.layer < 1} onClick={() => act(() => mergeDown(sp.doc, sp.layer), () => sp.layer--)}>Merge</button>
           <button type="button" className="ghost small" title="Delete layer" aria-label="Delete layer" disabled={layers.length < 2} onClick={() => act(() => removeLayer(sp.doc, sp.layer), () => { sp.layer = Math.max(0, sp.layer - 1); })}>×</button>
+          <button type="button" className="ghost small" title="Add an image as a reference layer (shown while drawing, not exported)" onClick={() => refFile.current?.click()}>Ref</button>
         </div>
       </div>
+      <input ref={refFile} type="file" accept="image/*" hidden
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) addReferenceImage(f).catch((err) => setStatus((err as Error).message, true)); }} />
       <div className="sp-layers" id="spLayers">
         {order.map((li) => {
           const l = layers[li];
@@ -91,6 +97,10 @@ export function LayersPanel() {
                 ? <RenameField index={li} onDone={() => setRenaming(null)} />
                 : <span className="sp-lname" title="Double click to rename" onDoubleClick={() => setRenaming(li)}>{l.name}</span>}
               <small>{l.opacity < 1 ? `${Math.round(l.opacity * 100)}%` : ''}</small>
+              {l.ref && (
+                <button type="button" className="sp-reftag" title="Reference layer: shown while drawing, not exported. Click to make it a normal layer."
+                  onClick={(e) => { e.stopPropagation(); toggleReference(li); }}>REF</button>
+              )}
             </div>
           );
         })}
