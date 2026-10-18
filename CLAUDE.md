@@ -7,6 +7,7 @@ Pixelize converts fake AI pixel art into real pixel art. Vite + TypeScript, no f
 - `npm test`: Vitest on the core. Run it after any change in `src/core/` or `src/export/`.
 - `npm run build`: `tsc`, then Vite bundles everything (CSS, JS and the inline worker) into `dist/pixelize.html`.
 - `npm run cli -- <image> [options]`: the terminal tool (runs `cli/pixelize.ts` with tsx).
+- `npm run desktop` / `npm run desktop:dist`: run the Electron app / build the Windows installer and portable exe into `release/` (git-ignored). `electron/main.cjs` only wraps `dist/desktop/index.html`; keep app logic out of it so the web page and the desktop app stay the same code.
 - `npm run image -- "<prompt>" [options]`: generates images with the OpenAI Images API (`cli/generate-image.mjs`, plain Node, needs `OPENAI_API_KEY`; `--help` lists the options). Output goes to `generated/` (git-ignored) unless `--out` says otherwise.
 
 ## Rules
@@ -16,6 +17,7 @@ Pixelize converts fake AI pixel art into real pixel art. Vite + TypeScript, no f
 - The page is a step-by-step flow (`src/ui/steps.ts`). Each step's settings live in a `data-panel="<step>"` section of the side column; anything else that only belongs to some steps carries `data-show="<step> <step>…"` and gets the `offstep` class elsewhere. Modules that care about the step use `currentStep()` / `onStep()`. `initSteps()` runs last in `src/main.ts` so every `onStep` listener is registered first.
 - Cropping runs at the end of the pipeline, so `ProcessResult.pixels` may be smaller than the sampled image: `preBg` stays uncropped (`fullW` × `fullH`) and `crop` says where the result sits in it. Background picks are stored in those full coordinates.
 - TypeScript is pinned to 5.6: 5.7+ makes typed arrays generic and every `ImageData`/`Blob` call fails to type-check.
+- If electron-builder fails extracting `winCodeSign` ("Cannot create symbolic link"), extract the cached `.7z` by hand into `%LOCALAPPDATA%electron-builderCachewinCodeSignwinCodeSign-2.6.0` (or turn on Windows Developer Mode).
 - Vite is pinned to 5 because the machine runs Node 20.17 (Vite 7 needs 20.19+).
 - Grid detection is tuned against the tests in `test/grid.test.ts`. If you change it, keep regular grids exact and the lantern sample at 90%+ exact (the remaining misses are blank stretches that are genuinely ambiguous).
 - Write comments and UI text in English.

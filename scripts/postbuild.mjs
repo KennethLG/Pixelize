@@ -1,9 +1,12 @@
 // Turns Vite's dist/index.html into dist/pixelize.html without the document
 // skeleton (doctype, html, head, body). The artifact host adds its own skeleton,
 // and browsers open the fragment fine from a double click.
-import { readFileSync, writeFileSync, rmSync } from 'node:fs';
+// The full document is kept as dist/desktop/index.html for the Electron app.
+import { readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 
 let html = readFileSync('dist/index.html', 'utf8');
+mkdirSync('dist/desktop', { recursive: true });
+writeFileSync('dist/desktop/index.html', html);
 
 const removeFirst = (re) => { html = html.replace(re, ''); };
 const removeLast = (tag) => {

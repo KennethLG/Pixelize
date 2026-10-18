@@ -5,6 +5,7 @@ Turns fake pixel art (AI images with big simulated pixels of uneven size and sli
 ## Use it
 
 - **Web:** open `dist/pixelize.html` (build it first) or the published page. Everything runs in the browser.
+- **Desktop (Windows):** `npm run desktop:dist` builds `release/Pixelize Setup <version>.exe` (installer) and `release/Pixelize-<version>-portable.exe`. `npm run desktop` runs it without packaging.
 - **Terminal:** `npm run cli -- image.png` writes `image_pixel.png` and a scaled preview. `npm run cli -- --help` lists the options.
 
 ## Develop
@@ -26,7 +27,9 @@ npm run build    # type-check, then bundle everything into dist/pixelize.html
 | `src/ui/` | One module per part of the page: `app` (state and processing loop), `steps` (the step-by-step flow), `controls`, `views`, `editor`, `palettePanel`, `anim`, `downloads`, `batch`, `settings`, `input`. |
 | `cli/` | The terminal tool. |
 | `test/` | Vitest tests plus helpers (regular grids, an independent GIF decoder). |
-| `scripts/postbuild.mjs` | Strips the document skeleton from the build so it publishes as an artifact. |
+| `scripts/postbuild.mjs` | Strips the document skeleton from the build so it publishes as an artifact, and keeps the full document in `dist/desktop/` for Electron. |
+| `electron/` | The desktop shell: a window that loads `dist/desktop/index.html`, with native save dialogs. |
+| `build/` | App icon (`icon.png`, 512×512) and the generated image it was cropped from. |
 
 ## Features
 
