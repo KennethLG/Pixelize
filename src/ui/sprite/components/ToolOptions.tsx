@@ -1,11 +1,15 @@
 // The bar above the canvas: options of the current tool, and what you can do
 // with the selection when there is one.
 
-import { commitFloating, deselect, sp } from '../state';
-import { deleteSelection, outlineArt, setBrush, setOption, transform } from '../actions';
+import { carryFloating, commitFloating, deselect, sp } from '../state';
+import {
+  bakeLayerPart, deleteSelection, freePose, makeLayerPart, outlineArt, resetPivot, restPose, setAngle, setBrush, setLayerParent, setOption, transform,
+} from '../actions';
+import { parentChoices, partOf, poseOf } from '../../../core/parts';
 import { selectAll, selectionBox } from '../canvas';
 import { copy, cut } from '../io';
 import { useSp } from '../hooks';
+import { keyLabel } from '../../keys';
 import { Seg } from '../../components/common';
 
 const HINTS: Partial<Record<typeof sp.tool, string>> = {
@@ -14,6 +18,7 @@ const HINTS: Partial<Record<typeof sp.tool, string>> = {
   rect: 'Shift: square or circle. Right click: secondary color.',
   ellipse: 'Shift: square or circle. Right click: secondary color.',
   select: 'Shift adds, Alt subtracts. Drag inside the selection to move it, or its squares to resize it.',
+  lasso: 'Draw around what you want to move (an arm, a leg). Shift adds, Alt subtracts. Then drag the round handle to turn it around the target.',
   wand: 'Shift adds, Alt subtracts. Drag inside the selection to move it, or its squares to resize it.',
   move: 'Drag to move the selection, or the whole layer if nothing is selected. Arrow keys move 1 px.',
   picker: 'Left click: primary color. Right click: secondary.',
@@ -24,7 +29,7 @@ const HINTS: Partial<Record<typeof sp.tool, string>> = {
 function SelectionActions() {
   const box = selectionBox();
   if (!box) return null;
-  const btn = (label: string, title: string, fn: () => void) => (
+  const btn = (label: string, title: string, fn: (e: React.MouseEvent) => void) => (
     <button type="button" className="ghost small" title={title} onClick={fn}>{label}</button>
   );
   return (
@@ -37,6 +42,14 @@ function SelectionActions() {
       {btn('⟲ 90°', 'Turn a quarter to the left', () => transform(() => 'rotCCW'))}
       {btn('⟳ 90°', 'Turn a quarter to the right', () => transform(() => 'rotCW'))}
       {btn('180°', 'Turn upside down', () => transform(() => 'rot180'))}
+      <label className="sp-angle" title={`Turn around the pivot (the target), with RotSprite so lines stay clean.\nDrag the round handle above the selection, or press ${keyLabel('sprite.turnRight')} / ${keyLabel('sprite.turnLeft')}.`}>
+        <span className="muted">Angle</span>
+        <input type="number" step={1} value={sp.floating?.angle ?? 0} aria-label="Angle in degrees" onChange={(e) => setAngle(Number(e.target.value) || 0)} />
+        <span className="muted">°</span>
+      </label>
+      {sp.floating?.pivot && btn('Center pivot', 'Put the turning point back in the middle', resetPivot)}
+      {btn('◀ Frame', 'Copy the selection into the previous frame, keeping its place and turn.\nShift+click: move it there instead.', (e) => carryFloating(sp.frame - 1, !e.shiftKey))}
+      {btn('Frame ▶', 'Copy the selection into the next frame, keeping its place and turn.\nShift+click: move it there instead.', (e) => carryFloating(sp.frame + 1, !e.shiftKey))}
       {btn('Copy', 'Copy (Ctrl+C)', copy)}
       {btn('Cut', 'Cut (Ctrl+X)', cut)}
       {btn('Delete', 'Delete', deleteSelection)}
@@ -46,8 +59,40 @@ function SelectionActions() {
   );
 }
 
+/** Pose tool: make the current layer a part, hang it from another part, reset or free its pose in this frame. */
+function PoseOptions() {
+  const d = sp.doc, li = sp.layer, part = partOf(d, li);
+  if (!part) {
+    return (
+      <div className="group">
+        <button type="button" className="small" title="Use this layer's art in this frame as the part at rest. Then pose it in other frames instead of redrawing it." onClick={makeLayerPart}>
+          {`Make “${d.layers[li].name}” a part`}
+        </button>
+        <span className="hint">Put each limb on its own layer and make it a part. Duplicate the frame, then drag the parts to pose them.</span>
+      </div>
+    );
+  }
+  const pose = poseOf(d, sp.frame, li);
+  return (
+    <div className="group sp-pose">
+      <span className="tag">{pose ? `${Math.round(pose.angle)}°` : 'free here'}</span>
+      <label className="muted">
+        Hangs from{' '}
+        <select value={part.parent ?? ''} aria-label="Parent part" onChange={(e) => setLayerParent(e.target.value || null)}>
+          <option value="">nothing</option>
+          {parentChoices(d, li).map((i) => <option key={i} value={d.layers[i].part!.id}>{d.layers[i].name}</option>)}
+        </select>
+      </label>
+      <button type="button" className="ghost small" title="Back to the rest pose in this frame" onClick={restPose}>Rest pose</button>
+      {pose && <button type="button" className="ghost small" title="Keep this frame's pixels as they are and stop following the pose here" onClick={freePose}>Free this frame</button>}
+      <button type="button" className="ghost small" title="Stop being a part. Every frame keeps its pixels." onClick={bakeLayerPart}>Not a part</button>
+      <span className="hint">Drag to turn around the joint, Alt or right drag to move, drag the dot to move the joint. Paint in the rest pose to change it everywhere.</span>
+    </div>
+  );
+}
+
 export function ToolOptions() {
-  useSp('tool', 'selection', 'pixels');
+  useSp('tool', 'selection', 'pixels', 'cursor', 'structure');
   const t = sp.tool;
   const hasSelection = !!(sp.mask || sp.floating);
   const drawing = t === 'pencil' || t === 'eraser' || t === 'line' || t === 'shade' || t === 'rect' || t === 'ellipse';
@@ -106,6 +151,7 @@ export function ToolOptions() {
           ]}
           onChange={(v) => setOption('canvasMode', v)} />
       )}
+      {t === 'pose' && <PoseOptions />}
       {!hasSelection && HINTS[t] && <span className="hint">{HINTS[t]}</span>}
       {hasSelection && <SelectionActions />}
       <button type="button" className="ghost small sp-selall" title={'Outline the art on this layer (or the selected art) with the primary color.\nShift+click: fill the diagonal corners too.'} onClick={(e) => outlineArt(e.shiftKey)}>Outline</button>

@@ -21,8 +21,10 @@ export const TOOLS: ToolDef[][] = [
   ],
   [
     { tool: 'select', name: 'Select', help: 'Shift adds, Alt subtracts. Drag inside to move, drag the squares to resize.' },
+    { tool: 'lasso', name: 'Lasso', help: 'Draw around the pixels to select (an arm, a leg). Shift adds, Alt subtracts.' },
     { tool: 'wand', name: 'Select by color', help: 'Shift adds, Alt subtracts.' },
     { tool: 'move', name: 'Move', help: 'Moves the selection, or the whole layer when nothing is selected.' },
+    { tool: 'pose', name: 'Pose parts', help: 'Drag a part to turn it around its joint, Alt or right drag to move it. Drag the joint dot to move the joint.' },
     { tool: 'canvas', name: 'Canvas size', help: 'Drag the squares on the edges of the paper.' },
     { tool: 'pan', name: 'Hand', help: 'Moves the view.' },
   ],

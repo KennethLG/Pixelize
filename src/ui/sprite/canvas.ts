@@ -5,14 +5,16 @@
 
 import {
   boxOf, colorMask, combineMasks, drawEllipse, drawLine, drawRect, fill, getPixel, isLCorner, linePoints, maskBounds,
-  paintPoints, rectMask, replaceColor, snapAngle, stamp, type Bitmap, type Box, type MaskOp, type PaintOpts,
+  paintPoints, polygonMask, rectMask, replaceColor, snapAngle, stamp, type Bitmap, type Box, type MaskOp, type PaintOpts,
 } from '../../core/bitmap';
 import { hex, type RGBA } from '../../core/color';
+import { jointOf, parentAngle, partOf, poseOf, REST, setPivot, setPose, syncParts, toRest, type Pose } from '../../core/parts';
+import { placeFloating } from '../../core/rotsprite';
 import { applyVariant, nearestColor, shadeColor, snapPalette, type SnapPalette } from '../../core/shading';
 import { shadeRamps, userPalette } from './prefs';
 import { cloneDoc, composite, cropCanvas, scaleDoc, type SpriteDoc } from '../../core/sprite';
 import { cssVar, setStatus as setStatusText } from '../dom';
-import { cel, commitFloating, deselect, emit, lift, liveCel, on, pushCel, pushDoc, setColor, sp, type Tool } from './state';
+import { cel, commitFloating, deselect, emit, lift, liveCel, on, pushCel, pushDoc, setColor, setLayer, sp, type Tool } from './state';
 
 type Pt = { x: number; y: number };
 
@@ -123,11 +125,43 @@ function putImage(target: HTMLCanvasElement, px: Uint8ClampedArray, w: number, h
   target.getContext('2d')!.putImageData(new ImageData(px, w, h), 0, 0);
 }
 
-/** Selection box: the floating piece, or the bounds of the mask. */
+/** Selection box: the floating piece (where it lands once turned), or the bounds of the mask. */
 export function selectionBox(): Box | null {
   const f = sp.floating;
+  if (f && f.angle) { const p = placeFloating(f); return { x: p.x, y: p.y, w: p.piece.w, h: p.piece.h }; }
   if (f) return { x: f.x, y: f.y, w: f.w, h: f.h };
   return sp.mask ? maskBounds(sp.mask, sp.doc.w) : null;
+}
+
+/** How the selection turns: its unturned box, its pivot in sprite pixels and the cos/sin of its angle. */
+interface Turn { box: Box; cx: number; cy: number; cos: number; sin: number }
+function turnOf(): Turn | null {
+  const f = sp.floating;
+  if (f) {
+    const [px, py] = f.pivot ?? [0.5, 0.5], t = ((f.angle ?? 0) * Math.PI) / 180;
+    return { box: { x: f.x, y: f.y, w: f.w, h: f.h }, cx: f.x + px * f.w, cy: f.y + py * f.h, cos: Math.cos(t), sin: Math.sin(t) };
+  }
+  const b = sp.mask ? maskBounds(sp.mask, sp.doc.w) : null;
+  if (!b) return null;
+  // the pivot of the last piece put down, when it falls on this selection (lift() uses it too)
+  const p = sp.pivotAt;
+  const at = p && p[0] >= b.x && p[1] >= b.y && p[0] <= b.x + b.w && p[1] <= b.y + b.h ? p : [b.x + b.w / 2, b.y + b.h / 2];
+  return { box: b, cx: at[0], cy: at[1], cos: 1, sin: 0 };
+}
+/** A point of the unturned box, turned, on screen. */
+function turnedScreen(t: Turn, x: number, y: number): [number, number] {
+  const X = t.cx + (x - t.cx) * t.cos - (y - t.cy) * t.sin, Y = t.cy + (x - t.cx) * t.sin + (y - t.cy) * t.cos;
+  return [view.ox + X * view.zoom, view.oy + Y * view.zoom];
+}
+const TURN_GAP = 22;
+/** Where the pivot and the turning handle (above the top edge) are drawn. */
+function turnHandles(t: Turn): { pivot: [number, number]; top: [number, number]; knob: [number, number] } {
+  const top = turnedScreen(t, t.box.x + t.box.w / 2, t.box.y);
+  return {
+    pivot: [view.ox + t.cx * view.zoom, view.oy + t.cy * view.zoom],
+    top,
+    knob: [top[0] + t.sin * TURN_GAP, top[1] - t.cos * TURN_GAP],
+  };
 }
 
 const HANDLE = 7;
@@ -137,7 +171,7 @@ function handlePoints(b: Box): [Handle, number, number][] {
   const x0 = ox + b.x * z, y0 = oy + b.y * z, x1 = ox + (b.x + b.w) * z, y1 = oy + (b.y + b.h) * z, xm = (x0 + x1) / 2, ym = (y0 + y1) / 2;
   return [['nw', x0, y0], ['n', xm, y0], ['ne', x1, y0], ['e', x1, ym], ['se', x1, y1], ['s', xm, y1], ['sw', x0, y1], ['w', x0, ym]];
 }
-const showsHandles = () => sp.tool === 'select' || sp.tool === 'wand' || sp.tool === 'move';
+const showsHandles = () => sp.tool === 'select' || sp.tool === 'lasso' || sp.tool === 'wand' || sp.tool === 'move';
 
 let antsOffset = 0;
 
@@ -233,6 +267,7 @@ export function draw(): void {
 
   drawSelection(ctx);
   if (sp.tool === 'canvas') drawCanvasHandles(ctx);
+  if (sp.tool === 'pose') drawSkeleton(ctx);
 
   if (hover && !spaceHeld && (inside(hover) || onTiles(hover)) && DRAW_TOOLS.includes(sp.tool) && !gesture) {
     const o = Math.floor((sp.brush - 1) / 2);
@@ -243,10 +278,11 @@ export function draw(): void {
 }
 
 function drawSelection(ctx: CanvasRenderingContext2D): void {
-  const { zoom: z, ox, oy } = view;
   const segs: [number, number, number, number][] = [];
   const f = sp.floating;
-  if (f) {
+  if (f && f.angle) {
+    drawTurnedBox(ctx);
+  } else if (f) {
     segs.push([f.x, f.y, f.x + f.w, f.y], [f.x, f.y + f.h, f.x + f.w, f.y + f.h], [f.x, f.y, f.x, f.y + f.h], [f.x + f.w, f.y, f.x + f.w, f.y + f.h]);
   } else if (sp.mask) {
     // an edge wherever a selected pixel meets an unselected one
@@ -262,7 +298,25 @@ function drawSelection(ctx: CanvasRenderingContext2D): void {
       }
     }
   }
-  if (!segs.length) return;
+  if (gesture?.type === 'lasso') drawLassoPath(ctx, gesture.pts);
+  if (segs.length) drawAnts(ctx, segs);
+
+  const b = selectionBox();
+  if (b && showsHandles()) {
+    if (!f?.angle) {
+      for (const [, x, y] of handlePoints(b)) {
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#000';
+        ctx.fillRect(x - HANDLE / 2, y - HANDLE / 2, HANDLE, HANDLE);
+        ctx.strokeRect(x - HANDLE / 2 + 0.5, y - HANDLE / 2 + 0.5, HANDLE - 1, HANDLE - 1);
+      }
+    }
+    drawTurnHandles(ctx);
+  }
+}
+
+function drawAnts(ctx: CanvasRenderingContext2D, segs: [number, number, number, number][]): void {
+  const { zoom: z, ox, oy } = view;
   ctx.beginPath();
   for (const [x0, y0, x1, y1] of segs) {
     ctx.moveTo(Math.round(ox + x0 * z) + 0.5, Math.round(oy + y0 * z) + 0.5);
@@ -277,16 +331,81 @@ function drawSelection(ctx: CanvasRenderingContext2D): void {
   ctx.strokeStyle = '#fff';
   ctx.stroke();
   ctx.setLineDash([]);
+}
 
-  const b = selectionBox();
-  if (b && showsHandles()) {
-    for (const [, x, y] of handlePoints(b)) {
-      ctx.fillStyle = '#fff';
-      ctx.strokeStyle = '#000';
-      ctx.fillRect(x - HANDLE / 2, y - HANDLE / 2, HANDLE, HANDLE);
-      ctx.strokeRect(x - HANDLE / 2 + 0.5, y - HANDLE / 2 + 0.5, HANDLE - 1, HANDLE - 1);
-    }
-  }
+/** The outline of a turned piece: its box, turned around the pivot. */
+function drawTurnedBox(ctx: CanvasRenderingContext2D): void {
+  const t = turnOf()!, b = t.box;
+  const pts = [turnedScreen(t, b.x, b.y), turnedScreen(t, b.x + b.w, b.y), turnedScreen(t, b.x + b.w, b.y + b.h), turnedScreen(t, b.x, b.y + b.h)];
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  ctx.closePath();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#000';
+  ctx.stroke();
+  ctx.setLineDash([4, 4]);
+  ctx.lineDashOffset = -antsOffset;
+  ctx.strokeStyle = '#fff';
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawLassoPath(ctx: CanvasRenderingContext2D, pts: [number, number][]): void {
+  if (pts.length < 2) return;
+  const { zoom: z, ox, oy } = view;
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => (i ? ctx.lineTo(ox + x * z, oy + y * z) : ctx.moveTo(ox + x * z, oy + y * z)));
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = cssVar('--accent');
+  ctx.stroke();
+}
+
+/** The pivot (a target) and the round handle above the box that turns the selection. */
+function drawTurnHandles(ctx: CanvasRenderingContext2D): void {
+  const t = turnOf();
+  if (!t) return;
+  const { pivot, top, knob } = turnHandles(t);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#000';
+  ctx.beginPath();
+  ctx.moveTo(top[0], top[1]);
+  ctx.lineTo(knob[0], knob[1]);
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(knob[0], knob[1], HANDLE / 2 + 1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  const accent = cssVar('--accent');
+  ctx.beginPath();
+  ctx.arc(pivot[0], pivot[1], 5, 0, Math.PI * 2);
+  ctx.moveTo(pivot[0] - 8, pivot[1]); ctx.lineTo(pivot[0] + 8, pivot[1]);
+  ctx.moveTo(pivot[0], pivot[1] - 8); ctx.lineTo(pivot[0], pivot[1] + 8);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#fff';
+  ctx.stroke();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = accent;
+  ctx.stroke();
+}
+
+/** The pivot or the turning handle under the pointer. */
+function turnHandleAt(e: PointerEvent): 'pivot' | 'turn' | null {
+  if (!showsHandles()) return null;
+  const t = turnOf();
+  if (!t) return null;
+  const r = canvas().getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  const { pivot, knob } = turnHandles(t);
+  if (Math.hypot(knob[0] - x, knob[1] - y) <= HANDLE / 2 + 4) return 'turn';
+  if (Math.hypot(pivot[0] - x, pivot[1] - y) <= 7) return 'pivot';
+  return null;
+}
+
+/** The pointer in sprite pixels, not rounded. */
+function pointAt(e: { clientX: number; clientY: number }): [number, number] {
+  const r = canvas().getBoundingClientRect();
+  return [(e.clientX - r.left - view.ox) / view.zoom, (e.clientY - r.top - view.oy) / view.zoom];
 }
 
 function drawCanvasHandles(ctx: CanvasRenderingContext2D): void {
@@ -375,6 +494,16 @@ type Gesture =
   // shading: each pixel changes once per stroke, from its color before the stroke
   | { type: 'shade'; dir: 1 | -1; last: Pt; before: Uint8ClampedArray; done: Set<number> }
   | { type: 'marquee'; start: Pt; end: Pt; op: MaskOp }
+  // lasso: the outline so far, in (fractional) sprite pixels
+  | { type: 'lasso'; pts: [number, number][]; op: MaskOp }
+  // turning around the pivot: the pointer's angle and the piece's angle when the drag started
+  | { type: 'turn'; a0: number; angle0: number }
+  // moving the pivot: the piece as it was, so a turned piece stays where it is on screen
+  | { type: 'pivot'; x0: number; y0: number; pivot0: [number, number] | null }
+  // pose tool: turning or shifting part `li`; `prev` is the document for undo until the first change
+  | { type: 'pose'; li: number; mode: 'turn' | 'shift'; pose0: Pose; a0: number; start: [number, number]; prev: SpriteDoc | null }
+  // pose tool: moving a part's pivot (its joint)
+  | { type: 'joint'; li: number; prev: SpriteDoc | null }
   // the pixels are only lifted once the pointer really moves, so a click stays a click
   | { type: 'move'; start: Pt; fx: number; fy: number; lifted: boolean; tool: Tool }
   | { type: 'scale'; handle: Handle; box: Box | null }
@@ -412,14 +541,16 @@ function shadePoint(g: Extract<Gesture, { type: 'shade' }>, x: number, y: number
 }
 const maskOp = (e: { shiftKey: boolean; altKey: boolean }): MaskOp => (e.shiftKey ? 'add' : e.altKey ? 'subtract' : 'replace');
 const inMask = (p: Pt) => {
-  const f = sp.floating;
-  if (f) return p.x >= f.x && p.y >= f.y && p.x < f.x + f.w && p.y < f.y + f.h;
+  const b = sp.floating && selectionBox();
+  if (b) return p.x >= b.x && p.y >= b.y && p.x < b.x + b.w && p.y < b.y + b.h;
   return !!sp.mask && inside(p) && sp.mask[p.y * sp.doc.w + p.x] === 1;
 };
 
 function handleAt(e: PointerEvent): Handle | null {
   const b = sp.tool === 'canvas' ? { x: 0, y: 0, w: sp.doc.w, h: sp.doc.h } : selectionBox();
   if (!b || !(showsHandles() || sp.tool === 'canvas')) return null;
+  // a turned piece has no scale handles (Apply, then scale)
+  if (sp.tool !== 'canvas' && sp.floating?.angle) return null;
   const r = canvas().getBoundingClientRect();
   const x = e.clientX - r.left, y = e.clientY - r.top;
   const r2 = HANDLE / 2 + 2;
@@ -551,6 +682,7 @@ function onPointerDown(e: PointerEvent): void {
   }
 
   if (tool === 'picker') { pickColor(p, e.button === 2 ? 'secondary' : 'primary'); return; }
+  if (tool === 'pose') { startPose(e, p); return; }
 
   if (tool === 'pencil' || tool === 'eraser') {
     const color: RGBA = tool === 'eraser' ? [0, 0, 0, 0] : colorFor(e);
@@ -583,8 +715,21 @@ function onPointerDown(e: PointerEvent): void {
     draw();
     return;
   }
-  if (tool === 'select' || tool === 'wand' || tool === 'move') {
+  if (tool === 'select' || tool === 'lasso' || tool === 'wand' || tool === 'move') {
     if (e.button !== 0) return;
+    const turnHandle = turnHandleAt(e);
+    if (turnHandle) {
+      const f = lift();
+      if (!f) return;
+      if (turnHandle === 'turn') {
+        const t = turnOf()!, [x, y] = pointAt(e);
+        gesture = { type: 'turn', a0: Math.atan2(y - t.cy, x - t.cx), angle0: f.angle ?? 0 };
+      } else {
+        gesture = { type: 'pivot', x0: f.x, y0: f.y, pivot0: f.pivot ?? null };
+      }
+      emit('pixels', 'selection');
+      return;
+    }
     const handle = handleAt(e);
     if (handle) { gesture = { type: 'scale', handle, box: null }; return; }
     const op = maskOp(e);
@@ -595,6 +740,7 @@ function onPointerDown(e: PointerEvent): void {
     commitFloating();
     if (tool === 'wand') { wandAt(p, op); return; }
     marqueeBase = sp.mask?.slice() ?? null;
+    if (tool === 'lasso') { gesture = { type: 'lasso', pts: [pointAt(e)], op }; return; }
     gesture = { type: 'marquee', start: p, end: p, op };
   }
 }
@@ -626,6 +772,25 @@ function onPointerMove(e: PointerEvent): void {
     const clamp = (q: Pt) => ({ x: Math.max(0, Math.min(sp.doc.w - 1, q.x)), y: Math.max(0, Math.min(sp.doc.h - 1, q.y)) });
     const a = clamp(g.start), b = clamp(p);
     sp.mask = combineMasks(marqueeBase, rectMask(sp.doc.w, sp.doc.h, boxOf(a.x, a.y, b.x, b.y)), g.op);
+  } else if (g.type === 'lasso') {
+    const q = pointAt(e), last = g.pts[g.pts.length - 1];
+    if (Math.hypot(q[0] - last[0], q[1] - last[1]) < 0.35) return;
+    g.pts.push(q);
+    sp.mask = combineMasks(marqueeBase, polygonMask(sp.doc.w, sp.doc.h, g.pts), g.op);
+  } else if (g.type === 'turn') {
+    const f = sp.floating, t = turnOf();
+    if (!f || !t) { gesture = null; return; }
+    const [x, y] = pointAt(e);
+    let deg = g.angle0 + ((Math.atan2(y - t.cy, x - t.cx) - g.a0) * 180) / Math.PI;
+    // Shift: steps of 15°; otherwise whole degrees
+    deg = e.shiftKey ? Math.round(deg / 15) * 15 : Math.round(deg);
+    f.angle = ((deg % 360) + 360) % 360;
+  } else if (g.type === 'pivot') {
+    movePivot(g, pointAt(e));
+  } else if (g.type === 'pose') {
+    movePose(g, e);
+  } else if (g.type === 'joint') {
+    moveJoint(g, e);
   } else if (g.type === 'move') {
     if (p.x === g.start.x && p.y === g.start.y && !g.lifted) return;
     if (!g.lifted) {
@@ -663,6 +828,135 @@ function wandAt(p: Pt, op: MaskOp): void {
   emit('selection');
 }
 
+/**
+ * Puts the pivot under the pointer (on whole or half pixels). A turned piece
+ * shifts its box so it stays where it is on screen.
+ */
+function movePivot(g: Extract<Gesture, { type: 'pivot' }>, q: [number, number]): void {
+  const f = sp.floating;
+  if (!f) return;
+  const P = [Math.round(q[0] * 2) / 2, Math.round(q[1] * 2) / 2];
+  const [p0x, p0y] = g.pivot0 ?? [0.5, 0.5];
+  const c0x = g.x0 + p0x * f.w, c0y = g.y0 + p0y * f.h;
+  const t = ((f.angle ?? 0) * Math.PI) / 180, cos = Math.cos(t), sin = Math.sin(t);
+  // the pointer in the unturned piece, then the shift that keeps the turned art in place
+  const lx = c0x + (P[0] - c0x) * cos + (P[1] - c0y) * sin, ly = c0y - (P[0] - c0x) * sin + (P[1] - c0y) * cos;
+  const ex = lx - c0x, ey = ly - c0y;
+  f.x = g.x0 + Math.round(ex * cos - ey * sin - ex);
+  f.y = g.y0 + Math.round(ex * sin + ey * cos - ey);
+  f.pivot = [(lx - g.x0) / f.w, (ly - g.y0) / f.h];
+}
+
+// ---------- pose tool (parts, core/parts.ts) ----------
+
+/** The topmost visible part with a pixel under the pointer in this frame. */
+function partAt(p: Pt): number | null {
+  if (!inside(p)) return null;
+  for (let li = sp.doc.layers.length - 1; li >= 0; li--) {
+    const l = sp.doc.layers[li];
+    if (l.part && l.visible && cel(sp.frame, li).px[(p.y * sp.doc.w + p.x) * 4 + 3]) return li;
+  }
+  return null;
+}
+
+/** A part's joint on screen. */
+function jointScreen(li: number): [number, number] {
+  const j = jointOf(sp.doc, sp.frame, li);
+  return [view.ox + j.x * view.zoom, view.oy + j.y * view.zoom];
+}
+
+/** The current layer's joint under the pointer, if it is a part. */
+function onJoint(e: { clientX: number; clientY: number }): boolean {
+  if (!partOf(sp.doc, sp.layer)) return false;
+  const r = canvas().getBoundingClientRect(), [x, y] = jointScreen(sp.layer);
+  return Math.hypot(e.clientX - r.left - x, e.clientY - r.top - y) <= 8;
+}
+
+/** Bones (parent joint to child joint) and joints of every visible part; the current layer's is bigger. */
+function drawSkeleton(ctx: CanvasRenderingContext2D): void {
+  const accent = cssVar('--accent');
+  const parts = sp.doc.layers.flatMap((l, li) => (l.part && l.visible ? [li] : []));
+  ctx.lineWidth = 2;
+  for (const li of parts) {
+    const parent = sp.doc.layers.findIndex((l) => l.part && l.part.id === sp.doc.layers[li].part!.parent);
+    if (parent < 0) continue;
+    const [x0, y0] = jointScreen(parent), [x1, y1] = jointScreen(li);
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = accent;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  for (const li of parts) {
+    const [x, y] = jointScreen(li), mine = li === sp.layer;
+    const free = !poseOf(sp.doc, sp.frame, li);
+    ctx.beginPath();
+    ctx.arc(x, y, mine ? 6 : 4, 0, Math.PI * 2);
+    ctx.fillStyle = free ? '#fff' : mine ? accent : cssVar('--panel');
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = mine ? '#fff' : accent;
+    ctx.stroke();
+  }
+}
+
+function startPose(e: PointerEvent, p: Pt): void {
+  if (onJoint(e)) {
+    gesture = { type: 'joint', li: sp.layer, prev: cloneDoc(sp.doc) };
+    return;
+  }
+  const li = partAt(p) ?? (partOf(sp.doc, sp.layer) ? sp.layer : null);
+  if (li === null) { setStatusText('Make a layer a part first (the button above the canvas), then drag it here to pose it.'); return; }
+  if (li !== sp.layer) setLayer(li);
+  syncParts(sp.doc);
+  const prev = cloneDoc(sp.doc);
+  const pose0 = poseOf(sp.doc, sp.frame, li) ?? { ...REST };
+  const j = jointOf(sp.doc, sp.frame, li), q = pointAt(e);
+  gesture = {
+    type: 'pose', li, mode: e.altKey || e.button === 2 ? 'shift' : 'turn', pose0,
+    a0: Math.atan2(q[1] - j.y, q[0] - j.x), start: q, prev,
+  };
+}
+
+/** The first change of a pose gesture records the document for undo. */
+function recordOnce(g: { prev: SpriteDoc | null }): void {
+  if (g.prev) { pushDoc(g.prev); g.prev = null; }
+}
+
+function movePose(g: Extract<Gesture, { type: 'pose' }>, e: PointerEvent): void {
+  const q = pointAt(e), pose = { ...g.pose0 };
+  if (g.mode === 'turn') {
+    // around the joint as it was when the drag started
+    const j = jointOf(sp.doc, sp.frame, g.li);
+    let deg = g.pose0.angle + ((Math.atan2(q[1] - j.y, q[0] - j.x) - g.a0) * 180) / Math.PI;
+    deg = e.shiftKey ? Math.round(deg / 15) * 15 : Math.round(deg);
+    if (deg === g.pose0.angle && poseOf(sp.doc, sp.frame, g.li)) return;
+    pose.angle = deg;
+  } else {
+    // whole pixels on screen, turned into the parent's frame of reference
+    const dx = Math.round(q[0] - g.start[0]), dy = Math.round(q[1] - g.start[1]);
+    if (!dx && !dy && poseOf(sp.doc, sp.frame, g.li)) return;
+    const r = (-parentAngle(sp.doc, sp.frame, g.li) * Math.PI) / 180;
+    pose.x = g.pose0.x + dx * Math.cos(r) - dy * Math.sin(r);
+    pose.y = g.pose0.y + dx * Math.sin(r) + dy * Math.cos(r);
+  }
+  recordOnce(g);
+  setPose(sp.doc, sp.frame, g.li, pose);
+  emit('pixels');
+}
+
+function moveJoint(g: Extract<Gesture, { type: 'joint' }>, e: PointerEvent): void {
+  const q = pointAt(e);
+  // pivots sit on pixel centers, where turns are exact
+  const at = toRest(sp.doc, sp.frame, g.li, Math.floor(q[0]) + 0.5, Math.floor(q[1]) + 0.5);
+  const pv = partOf(sp.doc, g.li)!.pivot;
+  if (Math.abs(at[0] - pv[0]) < 1e-6 && Math.abs(at[1] - pv[1]) < 1e-6) return;
+  recordOnce(g);
+  setPivot(sp.doc, g.li, at);
+  emit('selection');
+}
+
 /** Resizes the floating piece so the dragged edges sit on grid line `p`. Shift keeps the proportions. */
 function scaleTo(g: Extract<Gesture, { type: 'scale' }>, p: Pt, keepRatio: boolean): void {
   const f = sp.floating!, b = g.box!;
@@ -693,11 +987,16 @@ function endGesture(e: PointerEvent): void {
     sp.preview = null;
     pushCel(sp.frame, sp.layer, before);
     emit('pixels');
-  } else if (g.type === 'marquee') {
+  } else if (g.type === 'marquee' || g.type === 'lasso') {
     // a click without a drag clears the selection
-    if (g.start.x === g.end.x && g.start.y === g.end.y && g.op === 'replace') sp.mask = null;
+    const click = g.type === 'marquee' ? g.start.x === g.end.x && g.start.y === g.end.y : g.pts.length < 3;
+    if (click && g.op === 'replace') sp.mask = null;
     if (sp.mask && !sp.mask.some((v) => v)) sp.mask = null;
     emit('selection');
+  } else if (g.type === 'turn' || g.type === 'pivot') {
+    emit('pixels', 'selection');
+  } else if ((g.type === 'pose' || g.type === 'joint') && !g.prev) {
+    emit('pixels', 'structure');
   } else if (g.type === 'canvas') {
     if (g.changed) {
       pushDoc(g.orig);
@@ -708,7 +1007,7 @@ function endGesture(e: PointerEvent): void {
   } else if (g.type === 'move' && !g.lifted) {
     // a click inside the selection: the wand selects again, the marquee deselects
     if (g.tool === 'wand') { commitFloating(); wandAt(g.start, 'replace'); }
-    else if (g.tool === 'select') deselect();
+    else if (g.tool === 'select' || g.tool === 'lasso') deselect();
   } else if (g.type === 'move' || (g.type === 'scale' && g.box)) {
     emit('pixels', 'selection');
   }
@@ -721,9 +1020,12 @@ function updateCursor(e?: PointerEvent): void {
   if (!canvasEl) return;
   const c = canvas();
   if (spaceHeld || sp.tool === 'pan' || (sp.tool === 'canvas' && !(e && handleAt(e)))) { c.style.cursor = gesture?.type === 'pan' ? 'grabbing' : 'grab'; return; }
+  if (sp.tool === 'pose') { c.style.cursor = e && onJoint(e) ? 'move' : gesture ? 'grabbing' : 'grab'; return; }
+  const th = e && turnHandleAt(e);
+  if (th) { c.style.cursor = th === 'turn' ? (gesture ? 'grabbing' : 'grab') : 'move'; return; }
   const h = e && handleAt(e);
   if (h) { c.style.cursor = CURSORS[h]; return; }
-  if (sp.tool === 'move' || (e && (sp.tool === 'select' || sp.tool === 'wand') && !e.shiftKey && !e.altKey && inMask(pixelAt(e)))) { c.style.cursor = 'move'; return; }
+  if (sp.tool === 'move' || (e && (sp.tool === 'select' || sp.tool === 'lasso' || sp.tool === 'wand') &&!e.shiftKey && !e.altKey && inMask(pixelAt(e)))) { c.style.cursor = 'move'; return; }
   c.style.cursor = sp.tool === 'picker' ? 'copy' : 'crosshair';
 }
 

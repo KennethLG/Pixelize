@@ -317,6 +317,7 @@ body[data-mode="sprite"] .wrap { max-width: 1800px; }
 
 .sp-options .group { flex-wrap: nowrap; }
 .sp-options input[type="range"] { width: 110px; flex: none; }
+.sp-angle { display: inline-flex; align-items: center; gap: 4px; }
 .sp-sel { padding-left: 12px; border-left: 1px solid var(--line); }
 .sp-selall { margin-left: auto; }
 .sp-canvas-panel { padding: 6px; display: flex; flex-direction: column; }

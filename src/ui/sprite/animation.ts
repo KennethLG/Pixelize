@@ -5,6 +5,7 @@
 import { playbackSequence } from '../../core/frames';
 import { addFrame, addTag, duplicateFrame, mirrorFrames, tagAt, translateBitmap, type Tag } from '../../core/sprite';
 import type { Bitmap } from '../../core/bitmap';
+import { shiftPoses, syncParts } from '../../core/parts';
 import { setStatus } from '../dom';
 import { cel, commitFloating, emit, pushCel, pushDoc, setFrame, sp } from './state';
 
@@ -115,8 +116,11 @@ export function pasteCel(): void {
 export function shiftFrame(dx: number, dy: number): void {
   commitFloating();
   pushDoc();
+  syncParts(sp.doc);
   const f = sp.doc.frames[sp.frame];
   f.cels = f.cels.map((c) => translateBitmap(c, dx, dy));
+  // posed parts move by their pose, so the next redraw keeps the shift
+  shiftPoses(sp.doc, sp.frame, dx, dy);
   emit('pixels', 'structure');
 }
 
