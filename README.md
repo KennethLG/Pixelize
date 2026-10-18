@@ -28,8 +28,8 @@ npm run build    # type-check, then bundle everything into dist/pixelize.html
 | `src/export/` | GIF and ZIP writers (bytes in, bytes out). |
 | `src/worker.ts` | Runs `processImage` off the main thread. |
 | `src/ui/` | One module per part of the page: `mode` (Pixelize or Sprite editor), `app` (state and processing loop), `steps` (the step-by-step flow), `controls`, `views`, `editor`, `palettePanel`, `anim`, `downloads`, `batch`, `settings`, `input`. |
-| `index.html` + `src/html/` | The page's markup. `index.html` is only the skeleton; each part lives in a partial (`header.html`, `pixelize/<step>.html` and the workspace pieces, `sprite/<area>.html`) pulled in with `<!-- @include path -->`. A small plugin in `vite.config.ts` inlines them at build time, so the output is still one HTML file. |
-| `src/ui/sprite/` | The sprite editor: `state` (document, selection, undo), `canvas` (view and tools), `colors`, `layers`, `timeline`, `io` (open, save, export, clipboard, autosave), `index` (wiring and shortcuts). |
+| `index.html` + `src/html/` | The Pixelize mode's markup. `index.html` is only the skeleton; each part lives in a partial (`header.html`, `pixelize/<step>.html` and the workspace pieces) pulled in with `<!-- @include path -->`. A small plugin in `vite.config.ts` inlines them at build time, so the output is still one HTML file. |
+| `src/ui/sprite/` | The sprite editor, in React: `components/` (one per panel: top bar, tools, tool options, canvas, color, palettes, layers, timeline, plus shared pieces), `state` (document, selection, undo, events), `hooks` (`useSp`), `canvas` (the drawing engine: view, rendering, tools), `actions`, `io` (open, save, export, clipboard, autosave), `prefs`, `shortcuts`, `mount`. |
 | `cli/` | The terminal tool. |
 | `test/` | Vitest tests plus helpers (regular grids, an independent GIF decoder). |
 | `scripts/postbuild.mjs` | Strips the document skeleton from the build so it publishes as an artifact, and keeps the full document in `dist/desktop/` for Electron. |

@@ -1,6 +1,7 @@
 // Sprite editor state: the document, what is selected (frame, layer, pixels),
-// the floating piece being moved, the colors, and undo/redo. Modules listen
-// with on(...) and redraw what they own:
+// the floating piece being moved, the colors, and undo/redo. The canvas engine
+// listens with on(...); React components re-render with useSp(...) (hooks.ts).
+// Events:
 //   pixels    cel contents changed (canvas, thumbnails, colors in use)
 //   structure layers or frames were added, removed, reordered or renamed
 //   cursor    current frame or layer changed
@@ -8,6 +9,10 @@
 //   color     primary/secondary color changed
 //   tool      the tool or its options changed
 //   paper     the background behind the sprite changed
+//   view      zoom or grid changed
+//   hover     the pixel under the pointer changed (position read-out)
+//   palette   the user's palette changed
+//   playback  the preview started or stopped playing
 
 import {
   blit, clearMasked, extract, floatingMask, renderFloating, type Bitmap, type Floating, type Mask,
@@ -15,7 +20,7 @@ import {
 import type { RGB, RGBA } from '../../core/color';
 import { cloneDoc, createDoc, type SpriteDoc } from '../../core/sprite';
 
-export type SpEvent = 'pixels' | 'structure' | 'cursor' | 'selection' | 'color' | 'tool' | 'paper';
+export type SpEvent = 'pixels' | 'structure' | 'cursor' | 'selection' | 'color' | 'tool' | 'paper' | 'view' | 'hover' | 'palette' | 'playback';
 export type Tool = 'pan' | 'pencil' | 'eraser' | 'bucket' | 'picker' | 'rect' | 'ellipse' | 'select' | 'wand' | 'move' | 'canvas';
 
 /** A floating piece also remembers its layer, frame, and the cel before it was lifted (for undo). */
@@ -39,15 +44,37 @@ export const sp = {
   /** what shows behind the sprite (only for looking at; exports stay transparent) */
   paperMode: 'checker' as 'checker' | 'color',
   paperColor: [255, 255, 255] as RGB,
+  /** what the color picker edits */
+  pickSlot: 'primary' as 'primary' | 'secondary' | 'paper',
+  showGrid: true,
+  /** grid cell size in sprite pixels: 1 × 1 is the pixel grid, bigger sizes mark tiles or frames */
+  gridW: 1,
+  gridH: 1,
   onion: false,
+  /** the animated preview is playing */
+  playing: false,
   /** the current layer's cel with a shape still being dragged out (rectangle tool) */
   preview: null as Bitmap | null,
   name: 'sprite',
 };
 
-const listeners = new Map<SpEvent, (() => void)[]>();
-export const on = (ev: SpEvent, fn: () => void) => { listeners.set(ev, [...(listeners.get(ev) || []), fn]); };
-export const emit = (...evs: SpEvent[]) => { for (const ev of new Set(evs)) for (const fn of listeners.get(ev) || []) fn(); };
+const listeners = new Map<SpEvent, Set<() => void>>();
+/** How many times each event fired; React reads it to know when to re-render. */
+export const versions = new Map<SpEvent, number>();
+
+/** Listens to an event. Returns a function that stops listening. */
+export function on(ev: SpEvent, fn: () => void): () => void {
+  if (!listeners.has(ev)) listeners.set(ev, new Set());
+  listeners.get(ev)!.add(fn);
+  return () => { listeners.get(ev)!.delete(fn); };
+}
+
+export function emit(...evs: SpEvent[]): void {
+  for (const ev of new Set(evs)) {
+    versions.set(ev, (versions.get(ev) || 0) + 1);
+    for (const fn of [...(listeners.get(ev) || [])]) fn();
+  }
+}
 
 export const cel = (frame = sp.frame, layer = sp.layer) => sp.doc.frames[frame].cels[layer];
 

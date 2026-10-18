@@ -292,7 +292,9 @@ body[data-mode="sprite"] .wrap { max-width: 1800px; }
    On a normal screen it fills the window (no page scroll): the canvas takes
    the free space and the side column scrolls inside itself if it runs out.
    Small screens fall back to a page that scrolls. */
-.sprite { display: flex; flex-direction: column; gap: 8px; }
+.sprite, .sp-root { display: flex; flex-direction: column; gap: 8px; }
+/* the React root; it takes the paper class and color */
+.sp-root { flex: 1; min-height: 0; }
 .sp-bar { display: flex; flex-wrap: nowrap; gap: 6px 16px; align-items: center; padding: 6px 10px; overflow-x: auto; }
 .sp-bar > .group { flex: none; flex-wrap: nowrap; }
 .sp-bar input[type="number"], .sp-options input[type="number"], .sp-timeline input[type="number"] { width: 58px; padding: 3px 6px; }

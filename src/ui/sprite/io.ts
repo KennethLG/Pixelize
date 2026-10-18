@@ -1,21 +1,23 @@
 // Getting sprites in and out: new sprite, canvas size, opening images and
 // project files, exports (PNG, GameMaker strip, GIF), the clipboard and the
-// autosave that brings the last sprite back next time.
+// autosave that brings the last sprite back next time. No DOM lookups here:
+// the components pass in what the user typed.
 
 import { extract, newBitmap, renderFloating, type Bitmap } from '../../core/bitmap';
 import { DEFAULT_DURATION, composite, createDoc, parseDoc, resizeCanvas, scaleDoc, serializeDoc, type SpriteDoc } from '../../core/sprite';
 import { encodeGif } from '../../export/gif';
-import { $, field, int, setStatus, wait } from '../dom';
+import { setStatus, wait } from '../dom';
 import { canvasBlob, saveBlob } from '../downloads';
 import { decodeFile, imageToData } from '../input';
 import { viewCenter } from './canvas';
 import { cel, commitFloating, emit, floatPiece, on, pushCel, pushDoc, setDoc, setTool, sp } from './state';
 
 const SAVE_KEY = 'pixelize.sprite.doc';
-const MAX_SIDE = 2048;
+export const MAX_SIDE = 2048;
 
 const isBlank = (d: SpriteDoc) => d.frames.every((f) => f.cels.every((c) => !c.px.some((v, i) => i % 4 === 3 && v)));
 const safeName = (n: string) => n.replace(/\.[^.]+$/, '').replace(/_strip\d+$/i, '').replace(/[^\w.-]+/g, '_') || 'sprite';
+const clampScale = (s: number) => Math.max(1, Math.min(64, Math.round(s) || 1));
 
 function frameCanvas(fi: number, scale = 1): HTMLCanvasElement {
   const { w, h } = sp.doc;
@@ -31,34 +33,30 @@ function frameCanvas(fi: number, scale = 1): HTMLCanvasElement {
   return c;
 }
 
-const exportScale = () => Math.max(1, Math.min(64, int('spScale') || 1));
-
 // ---------- new, resize, open ----------
 
-function readSize(): [number, number] | null {
-  const w = int('spW'), h = int('spH');
-  if (!(w >= 1 && h >= 1 && w <= MAX_SIDE && h <= MAX_SIDE)) { setStatus(`Use a size from 1 to ${MAX_SIDE} px.`, true); return null; }
-  return [w, h];
+function validSize(w: number, h: number): boolean {
+  if (w >= 1 && h >= 1 && w <= MAX_SIDE && h <= MAX_SIDE) return true;
+  setStatus(`Use a size from 1 to ${MAX_SIDE} px.`, true);
+  return false;
 }
 
-function newSprite(): void {
-  const size = readSize();
-  if (!size) return;
+export function newSprite(w: number, h: number): void {
+  if (!validSize(w, h)) return;
   commitFloating();
   if (!isBlank(sp.doc) && !confirm('Start a new sprite? The current one is replaced (save it first if you need it).')) return;
-  setDoc(createDoc(size[0], size[1]), 'sprite');
-  setStatus(`New ${size[0]}×${size[1]} sprite`);
+  setDoc(createDoc(w, h), 'sprite');
+  setStatus(`New ${w}×${h} sprite`);
 }
 
-function resizeSprite(): void {
-  const size = readSize();
-  if (!size || (size[0] === sp.doc.w && size[1] === sp.doc.h)) return;
+export function resizeSprite(w: number, h: number): void {
+  if (!validSize(w, h) || (w === sp.doc.w && h === sp.doc.h)) return;
   pushDoc();
   sp.mask = null;
-  if (sp.canvasMode === 'stretch') scaleDoc(sp.doc, size[0], size[1]);
-  else resizeCanvas(sp.doc, size[0], size[1]);
+  if (sp.canvasMode === 'stretch') scaleDoc(sp.doc, w, h);
+  else resizeCanvas(sp.doc, w, h);
   emit('structure', 'pixels', 'selection');
-  setStatus(`Canvas is now ${size[0]}×${size[1]}${sp.canvasMode === 'stretch' ? ' (art stretched)' : ''}`);
+  setStatus(`Canvas is now ${w}×${h}${sp.canvasMode === 'stretch' ? ' (art stretched)' : ''}`);
 }
 
 /** Builds a document from an image. `frames` > 1 splits a horizontal strip. */
@@ -88,7 +86,6 @@ export function loadFrames(canvases: HTMLCanvasElement[], name: string): boolean
     return { cels: [b], duration: DEFAULT_DURATION };
   });
   setDoc(doc, safeName(name));
-  syncSizeInputs();
   return true;
 }
 
@@ -98,7 +95,6 @@ export async function openFile(file: File): Promise<void> {
     const doc = parseDoc(await file.text());
     if (!doc) { setStatus("That isn't a Pixelize sprite file.", true); return; }
     setDoc(doc, safeName(file.name));
-    syncSizeInputs();
     setStatus(`Opened ${file.name}`);
     return;
   }
@@ -109,27 +105,21 @@ export async function openFile(file: File): Promise<void> {
   const m = /_strip(\d+)\.[^.]+$/i.exec(file.name);
   const n = m && w % +m[1] === 0 ? +m[1] : 1;
   setDoc(docFromImage(data, w, h, n), safeName(file.name));
-  syncSizeInputs();
   setStatus(n > 1 ? `Opened ${file.name} as ${n} frames` : `Opened ${file.name}`);
-}
-
-function syncSizeInputs(): void {
-  field('spW').value = String(sp.doc.w);
-  field('spH').value = String(sp.doc.h);
 }
 
 // ---------- export ----------
 
-async function exportPng(): Promise<void> {
+export async function exportPng(scale: number): Promise<void> {
   commitFloating();
-  const s = exportScale();
+  const s = clampScale(scale);
   const suffix = sp.doc.frames.length > 1 ? `_${sp.frame + 1}` : '';
   await saveBlob(await canvasBlob(frameCanvas(sp.frame, s)), `${sp.name}${suffix}${s > 1 ? `_x${s}` : ''}.png`);
 }
 
-async function exportStrip(): Promise<void> {
+export async function exportStrip(scale: number): Promise<void> {
   commitFloating();
-  const s = exportScale(), n = sp.doc.frames.length;
+  const s = clampScale(scale), n = sp.doc.frames.length;
   const c = document.createElement('canvas');
   c.width = sp.doc.w * s * n;
   c.height = sp.doc.h * s;
@@ -138,16 +128,16 @@ async function exportStrip(): Promise<void> {
   await saveBlob(await canvasBlob(c), `${sp.name}_strip${n}.png`);
 }
 
-async function exportGif(): Promise<void> {
+export async function exportGif(scale: number): Promise<void> {
   commitFloating();
   setStatus('Encoding GIF…');
   await wait(20);
   const frames = sp.doc.frames.map((_, i) => composite(sp.doc, i));
-  const bytes = encodeGif(frames, sp.doc.w, sp.doc.h, exportScale(), sp.doc.frames.map((f) => f.duration / 10), true);
+  const bytes = encodeGif(frames, sp.doc.w, sp.doc.h, clampScale(scale), sp.doc.frames.map((f) => f.duration / 10), true);
   await saveBlob(new Blob([bytes], { type: 'image/gif' }), `${sp.name}.gif`);
 }
 
-async function saveProject(): Promise<void> {
+export async function saveProject(): Promise<void> {
   commitFloating();
   await saveBlob(new Blob([serializeDoc(sp.doc)], { type: 'application/json' }), `${sp.name}.pixelize`);
 }
@@ -227,7 +217,8 @@ function scheduleSave(): void {
   }, 600);
 }
 
-function restore(): void {
+/** Brings back the last sprite. */
+export function restore(): void {
   try {
     const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null') as { name: string; doc: string } | null;
     const doc = saved && parseDoc(saved.doc);
@@ -235,20 +226,8 @@ function restore(): void {
   } catch { /* nothing saved */ }
 }
 
+/** Paste, drop and autosave. `isActive` says whether the editor is the open mode. */
 export function initIo(isActive: () => boolean): void {
-  $('spNew').addEventListener('click', newSprite);
-  $('spResize').addEventListener('click', resizeSprite);
-  $('spOpen').addEventListener('click', () => field('spFile').click());
-  field('spFile').addEventListener('change', () => {
-    const f = field('spFile').files?.[0];
-    if (f) openFile(f).catch((e) => setStatus((e as Error).message, true));
-    field('spFile').value = '';
-  });
-  $('spSave').addEventListener('click', saveProject);
-  $('spExportPng').addEventListener('click', exportPng);
-  $('spExportStrip').addEventListener('click', exportStrip);
-  $('spExportGif').addEventListener('click', exportGif);
-
   document.addEventListener('paste', (e) => {
     if (!isActive() || (e.target as HTMLElement).matches?.('input[type="text"], input[type="number"], textarea')) return;
     e.preventDefault();
@@ -265,10 +244,6 @@ export function initIo(isActive: () => boolean): void {
     openFile(f).catch((err) => setStatus((err as Error).message, true));
   }, true);
 
-  restore();
-  syncSizeInputs();
   on('pixels', scheduleSave);
   on('structure', scheduleSave);
-  // the size fields follow the canvas (it can also change by dragging its edges)
-  on('structure', () => { if (document.activeElement !== field('spW') && document.activeElement !== field('spH')) syncSizeInputs(); });
 }

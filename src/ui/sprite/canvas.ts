@@ -1,5 +1,7 @@
-// The sprite editor canvas: zoom/pan view, drawing (onion skin, grid,
-// selection outline, scale handles) and the tools.
+// The sprite editor canvas engine: zoom/pan view, drawing (onion skin, grid,
+// selection outline, scale handles) and the tools. It is imperative on purpose
+// (pointer events and drawing must not go through React renders): the
+// CanvasPanel component hands it its elements with attachCanvas().
 
 import {
   boxOf, colorMask, combineMasks, drawEllipse, drawLine, drawRect, fill, getPixel, maskBounds, rectMask, replaceColor,
@@ -7,23 +9,22 @@ import {
 } from '../../core/bitmap';
 import { hex, type RGBA } from '../../core/color';
 import { cloneDoc, composite, cropCanvas, scaleDoc, type SpriteDoc } from '../../core/sprite';
-import { $, cssVar } from '../dom';
+import { cssVar } from '../dom';
 import { cel, commitFloating, deselect, emit, lift, liveCel, on, pushCel, pushDoc, setColor, sp, type Tool } from './state';
 
 type Pt = { x: number; y: number };
 
-const stage = () => $('spStage');
-const canvas = () => $<HTMLCanvasElement>('spCanvas');
+let stageEl: HTMLElement | null = null;
+let canvasEl: HTMLCanvasElement | null = null;
+const stage = () => stageEl!;
+const canvas = () => canvasEl!;
 const view = { zoom: 8, ox: 0, oy: 0, cw: 0, ch: 0, dpr: 1 };
 let fitted = '';
 let viewTouched = false;  // zoomed or panned by hand since the last fit
 let hover: Pt | null = null;
 let spaceHeld = false;
 let lastPaint: Pt | null = null;     // for Shift+click straight lines
-const PAPER_KEY = 'pixelize.sprite.paper';
-const GRID_KEY = 'pixelize.sprite.grid';
-/** Grid cell size in sprite pixels: 1 × 1 is the pixel grid, bigger sizes mark tiles or frames. */
-const grid = { w: 1, h: 1 };
+let hoverInfo = '';
 const MAX_SIDE = 2048;
 const art = document.createElement('canvas');
 const onionCanvas = document.createElement('canvas');
@@ -48,13 +49,17 @@ function setZoom(z: number, at: [number, number] | null): void {
   const cx = at ? at[0] : view.cw / 2, cy = at ? at[1] : view.ch / 2;
   view.ox = cx - ((cx - view.ox) * z) / view.zoom;
   view.oy = cy - ((cy - view.oy) * z) / view.zoom;
-  view.zoom = z;
-  $('spZoom').textContent = `${Math.round(z * 100)}%`;
+  if (z !== view.zoom) { view.zoom = z; emit('view'); }
 }
+
+export const zoomPercent = () => Math.round(view.zoom * 100);
+/** "x, y  #rrggbb" for the pixel under the pointer, or the canvas size. */
+export const hoverText = () => hoverInfo || `${sp.doc.w}×${sp.doc.h}`;
 
 export function fitView(): void {
   const { w, h } = sp.doc;
   if (!view.cw) return;
+  fitted = `${w}x${h}`;
   setZoom(Math.max(1, Math.floor(Math.min((view.cw - 32) / w, (view.ch - 32) / h))), null);
   view.ox = Math.round((view.cw - w * view.zoom) / 2);
   view.oy = Math.round((view.ch - h * view.zoom) / 2);
@@ -127,6 +132,7 @@ const showsHandles = () => sp.tool === 'select' || sp.tool === 'wand' || sp.tool
 let antsOffset = 0;
 
 export function draw(): void {
+  if (!canvasEl) return;
   const ctx = canvas().getContext('2d')!;
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   ctx.clearRect(0, 0, view.cw, view.ch);
@@ -153,7 +159,7 @@ export function draw(): void {
   putImage(art, composite(sp.doc, sp.frame, live ? { layer, cel: live } : undefined), w, h);
   ctx.drawImage(art, ox, oy, W, H);
 
-  if (($('spGrid') as HTMLInputElement).checked) {
+  if (sp.showGrid) {
     const lines = (sx: number, sy: number) => {
       ctx.beginPath();
       for (let x = 0; x <= w; x += sx) { const X = Math.round(ox + x * z) + 0.5; ctx.moveTo(X, oy); ctx.lineTo(X, oy + H); }
@@ -163,7 +169,7 @@ export function draw(): void {
     ctx.lineWidth = 1;
     // the pixel grid when zoomed in, then the bigger cells on top at any zoom
     if (z >= 6) { ctx.strokeStyle = cssVar('--pixgrid'); lines(1, 1); }
-    if (grid.w > 1 || grid.h > 1) { ctx.strokeStyle = cssVar('--grid'); lines(grid.w, grid.h); }
+    if (sp.gridW > 1 || sp.gridH > 1) { ctx.strokeStyle = cssVar('--grid'); lines(sp.gridW, sp.gridH); }
   }
   ctx.strokeStyle = cssVar('--line');
   ctx.strokeRect(ox - 0.5, oy - 0.5, W + 1, H + 1);
@@ -518,6 +524,7 @@ function endGesture(e: PointerEvent): void {
 const CURSORS: Record<Handle, string> = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize' };
 
 function updateCursor(e?: PointerEvent): void {
+  if (!canvasEl) return;
   const c = canvas();
   if (spaceHeld || sp.tool === 'pan' || (sp.tool === 'canvas' && !(e && handleAt(e)))) { c.style.cursor = gesture?.type === 'pan' ? 'grabbing' : 'grab'; return; }
   const h = e && handleAt(e);
@@ -527,10 +534,12 @@ function updateCursor(e?: PointerEvent): void {
 }
 
 function updateCursorInfo(p: Pt | null): void {
-  const info = $('spPos');
-  if (!p || !inside(p)) { info.textContent = `${sp.doc.w}×${sp.doc.h}`; return; }
-  const [r, g, b, a] = getPixel(sp.preview ?? cel(), p.x, p.y);
-  info.textContent = `${p.x}, ${p.y}` + (a ? `  #${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}` : '');
+  let text = '';
+  if (p && inside(p)) {
+    const [r, g, b, a] = getPixel(sp.preview ?? cel(), p.x, p.y);
+    text = `${p.x}, ${p.y}` + (a ? `  #${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}` : '');
+  }
+  if (text !== hoverInfo) { hoverInfo = text; emit('hover'); }
 }
 
 // ---------- selection commands (keyboard, buttons) ----------
@@ -551,88 +560,60 @@ export function selectAll(): void {
   emit('selection');
 }
 
-// The paper color is edited with the color panel's picker (colors.ts); this only shows and remembers it.
-function applyPaper(): void {
-  const root = $('spriteMode'), color = hex(sp.paperColor);
-  root.classList.toggle('paper-solid', sp.paperMode === 'color');
-  root.style.setProperty('--paper', color);
-  (document.querySelector(`input[name="spPaper"][value="${sp.paperMode}"]`) as HTMLInputElement).checked = true;
-  $('spPaperColor').style.setProperty('--c', color);
-  try { localStorage.setItem(PAPER_KEY, JSON.stringify({ mode: sp.paperMode, color })); } catch { /* storage unavailable */ }
-  draw();
-}
-
-function initGrid(): void {
-  const gw = $('spGridW') as HTMLInputElement, gh = $('spGridH') as HTMLInputElement;
-  try {
-    const saved = JSON.parse(localStorage.getItem(GRID_KEY) || 'null') as typeof grid | null;
-    if (saved) { grid.w = saved.w; grid.h = saved.h; }
-  } catch { /* nothing saved */ }
-  const clamp = (v: number) => Math.max(1, Math.min(512, Math.round(v) || 1));
-  const apply = () => {
-    grid.w = clamp(Number(gw.value));
-    grid.h = clamp(Number(gh.value));
-    try { localStorage.setItem(GRID_KEY, JSON.stringify(grid)); } catch { /* storage unavailable */ }
-    draw();
-  };
-  gw.value = String(grid.w = clamp(grid.w));
-  gh.value = String(grid.h = clamp(grid.h));
-  gw.addEventListener('input', apply);
-  gh.addEventListener('input', apply);
-  for (const el of [gw, gh]) el.addEventListener('change', () => { el.value = String(clamp(Number(el.value))); apply(); });
-}
-
-function initPaper(): void {
-  try {
-    const saved = JSON.parse(localStorage.getItem(PAPER_KEY) || 'null') as { mode: string; color: string } | null;
-    if (saved?.mode === 'color' || saved?.mode === 'checker') sp.paperMode = saved.mode;
-    if (/^#[0-9a-f]{6}$/i.test(saved?.color || '')) {
-      const v = parseInt(saved!.color.slice(1), 16);
-      sp.paperColor = [(v >> 16) & 255, (v >> 8) & 255, v & 255];
-    }
-  } catch { /* nothing saved */ }
-  document.querySelectorAll<HTMLInputElement>('input[name="spPaper"]').forEach((r) => r.addEventListener('change', () => {
-    if (r.checked) { sp.paperMode = r.value as typeof sp.paperMode; emit('paper'); }
-  }));
-  on('paper', applyPaper);
-  applyPaper();
-}
-
 export const setSpaceHeld = (v: boolean) => { spaceHeld = v; updateCursor(); draw(); };
 
-export function initCanvas(): void {
-  new ResizeObserver(sizeStage).observe(stage());
-  initPaper();
-  initGrid();
-  const c = canvas();
+/** Connects the engine to the canvas element (and the box that sizes it). Returns the undo for React's effect cleanup. */
+export function attachCanvas(stageBox: HTMLElement, canvasBox: HTMLCanvasElement): () => void {
+  stageEl = stageBox;
+  canvasEl = canvasBox;
+  view.cw = 0;
+  fitted = '';
+  const ro = new ResizeObserver(sizeStage);
+  ro.observe(stageBox);
+  const c = canvasBox;
+  const leave = () => { hover = null; updateCursorInfo(null); draw(); };
+  const menu = (e: Event) => e.preventDefault();
+  const wheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const r = c.getBoundingClientRect();
+    if (e.ctrlKey || Math.abs(e.deltaY) >= Math.abs(e.deltaX)) zoomStep(e.deltaY < 0 ? 1 : -1, [e.clientX - r.left, e.clientY - r.top]);
+  };
   c.addEventListener('pointerdown', onPointerDown);
   c.addEventListener('pointermove', onPointerMove);
   c.addEventListener('pointerup', endGesture);
   c.addEventListener('pointercancel', endGesture);
-  c.addEventListener('pointerleave', () => { hover = null; updateCursorInfo(null); draw(); });
-  c.addEventListener('contextmenu', (e) => e.preventDefault());
-  c.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const r = c.getBoundingClientRect();
-    if (e.ctrlKey || Math.abs(e.deltaY) >= Math.abs(e.deltaX)) zoomStep(e.deltaY < 0 ? 1 : -1, [e.clientX - r.left, e.clientY - r.top]);
-  }, { passive: false });
+  c.addEventListener('pointerleave', leave);
+  c.addEventListener('contextmenu', menu);
+  c.addEventListener('wheel', wheel, { passive: false });
 
-  $('spZoomIn').addEventListener('click', () => zoomStep(1));
-  $('spZoomOut').addEventListener('click', () => zoomStep(-1));
-  $('spFit').addEventListener('click', fitView);
-  $('spGrid').addEventListener('change', draw);
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { checker = null; draw(); });
+  const scheme = matchMedia('(prefers-color-scheme: dark)');
+  const rescheme = () => { checker = null; draw(); };
+  scheme.addEventListener('change', rescheme);
 
-  on('pixels', draw);
-  on('selection', draw);
-  on('cursor', draw);
-  on('structure', draw);
-  on('tool', () => { updateCursor(); draw(); });
+  const offs = [
+    on('pixels', draw), on('selection', draw), on('cursor', draw), on('structure', draw),
+    on('paper', draw), on('view', draw), on('tool', () => { updateCursor(); draw(); }),
+  ];
 
-  // marching ants
-  setInterval(() => {
-    if (!(sp.mask || sp.floating) || document.hidden || $('spriteMode').hidden) return;
+  // marching ants, only while there is a selection and the editor is on screen
+  const ants = setInterval(() => {
+    if (!(sp.mask || sp.floating) || document.hidden || !stageBox.offsetParent) return;
     antsOffset = (antsOffset + 1) % 8;
     draw();
   }, 120);
+
+  return () => {
+    ro.disconnect();
+    clearInterval(ants);
+    scheme.removeEventListener('change', rescheme);
+    offs.forEach((off) => off());
+    c.removeEventListener('pointerdown', onPointerDown);
+    c.removeEventListener('pointermove', onPointerMove);
+    c.removeEventListener('pointerup', endGesture);
+    c.removeEventListener('pointercancel', endGesture);
+    c.removeEventListener('pointerleave', leave);
+    c.removeEventListener('contextmenu', menu);
+    c.removeEventListener('wheel', wheel);
+    if (canvasEl === canvasBox) { stageEl = null; canvasEl = null; }
+  };
 }

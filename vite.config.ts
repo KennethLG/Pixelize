@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import type { Plugin } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
+import react from '@vitejs/plugin-react';
 
 const HTML_DIR = fileURLToPath(new URL('./src/html', import.meta.url));
 
@@ -33,7 +34,7 @@ function htmlIncludes(): Plugin {
 // Everything (CSS, JS and the worker) is inlined into one HTML file, so the page
 // works from a double click and publishes as a single artifact.
 export default defineConfig({
-  plugins: [htmlIncludes(), viteSingleFile()],
+  plugins: [htmlIncludes(), react(), viteSingleFile()],
   build: { outDir: 'dist', emptyOutDir: true },
   test: { environment: 'node', include: ['test/**/*.test.ts'] },
 });
