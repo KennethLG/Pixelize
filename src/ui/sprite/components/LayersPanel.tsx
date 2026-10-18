@@ -6,7 +6,7 @@ import { addLayer, duplicateLayer, mergeDown, moveLayer, removeLayer } from '../
 import { useSp } from '../hooks';
 import { addReferenceImage, toggleReference } from '../actions';
 import { setStatus } from '../../dom';
-import { emit, pushDoc, setLayer, sp } from '../state';
+import { emit, pushDoc, setLayer, setTool, sp } from '../state';
 import { useReorder } from '../../components/useReorder';
 
 function moveTo(from: number, to: number): void {
@@ -100,6 +100,10 @@ export function LayersPanel() {
               {l.ref && (
                 <button type="button" className="sp-reftag" title="Reference layer: shown while drawing, not exported. Click to make it a normal layer."
                   onClick={(e) => { e.stopPropagation(); toggleReference(li); }}>REF</button>
+              )}
+              {l.part && (
+                <button type="button" className="sp-reftag" title="Part: posed frame by frame instead of redrawn. Click to pose it with the Pose tool."
+                  onClick={(e) => { e.stopPropagation(); setLayer(li); setTool('pose'); }}>PART</button>
               )}
             </div>
           );

@@ -15,6 +15,8 @@ export const TOOL_ICONS: Record<Tool, ReactNode> = {
   ellipse: svg(<ellipse cx="12" cy="12" rx="8.5" ry="7" />),
   picker: svg(<><path d="M13.5 6.5l4 4" /><path d="M16 4.5a2.1 2.1 0 0 1 3 0l.5.5a2.1 2.1 0 0 1 0 3L17.5 10l-4-4z" /><path d="M14.5 8.5L6 17v3h3l8.5-8.5" /></>),
   select: svg(<><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" /><path d="M11 4h2M11 20h2M4 11v2M20 11v2" /></>),
+  lasso: svg(<><path d="M7 15.5C4.6 14.4 3 12.5 3 10.5 3 6.9 7 4 12 4s9 2.9 9 6.5S17 17 12 17c-1.2 0-2.3-.2-3.3-.5" /><circle cx="7.5" cy="17" r="1.8" /><path d="M7.5 18.8c0 1.2-.6 2.2-1.5 2.7" /></>),
+  pose: svg(<><circle cx="12" cy="5" r="2.2" /><path d="M12 7.5v6.5M12 14l-4 6M12 14l4 6M12 9.5l-5 2.5M12 9.5l4.5-3" /><circle cx="12" cy="9.5" r="1" fill="currentColor" /></>),
   wand: svg(<><path d="M4 20L14 10" /><path d="M12.5 8.5l3 3" /><path d="M17 3v3M15.5 4.5h3" /><path d="M20 9v2M19 10h2" /><path d="M9.5 3.5v2M8.5 4.5h2" /></>),
   move: svg(<><path d="M12 3v18M3 12h18" /><path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3" /></>),
   canvas: svg(<><path d="M6 2v14a2 2 0 0 0 2 2h14" /><path d="M18 22V8a2 2 0 0 0-2-2H2" /></>),

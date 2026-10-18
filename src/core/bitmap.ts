@@ -267,8 +267,12 @@ export function maskBounds(m: Mask, w: number): Box | null {
 
 // ---------- floating pieces (cut, copy, paste, move, scale) ----------
 
-/** A piece of pixels lifted off a layer, placed at x, y and drawn w × h. */
-export interface Floating { src: Bitmap; x: number; y: number; w: number; h: number }
+/**
+ * A piece of pixels lifted off a layer, placed at x, y and drawn w × h, then
+ * turned by `angle` degrees (clockwise) around `pivot`, given as a fraction of
+ * the drawn box (0.5, 0.5 is its center). placeFloating() in rotsprite.ts puts it together.
+ */
+export interface Floating { src: Bitmap; x: number; y: number; w: number; h: number; angle?: number; pivot?: [number, number] }
 
 /** Copies the masked pixels (all of them without a mask) into a bitmap the size of their bounds. */
 export function extract(b: Bitmap, mask: Mask | null): { piece: Bitmap; box: Box } | null {
@@ -339,13 +343,42 @@ export function blit(dst: Bitmap, piece: Bitmap, x: number, y: number): void {
   }
 }
 
-/** Mask of the pixels a floating piece covers once it is put down. */
-export function floatingMask(w: number, h: number, f: Floating): Mask {
-  const piece = renderFloating(f);
+/**
+ * Mask of a freehand outline (lasso): the pixels whose centers are inside the
+ * polygon (even-odd), plus the pixels the outline passes through. Points are
+ * in pixels, 0, 0 being the top-left corner of the canvas.
+ */
+export function polygonMask(w: number, h: number, pts: [number, number][]): Mask {
+  const m = new Uint8Array(w * h);
+  const n = pts.length;
+  for (let y = 0; y < h && n >= 3; y++) {
+    const yc = y + 0.5, xs: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % n];
+      if ((ay <= yc) !== (by <= yc)) xs.push(ax + ((yc - ay) / (by - ay)) * (bx - ax));
+    }
+    xs.sort((a, b) => a - b);
+    for (let k = 0; k + 1 < xs.length; k += 2) {
+      const from = Math.max(0, Math.ceil(xs[k] - 0.5)), to = Math.min(w - 1, Math.floor(xs[k + 1] - 0.5));
+      for (let x = from; x <= to; x++) m[y * w + x] = 1;
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % n];
+    for (const [x, y] of linePoints(Math.floor(ax), Math.floor(ay), Math.floor(bx), Math.floor(by))) {
+      if (x >= 0 && y >= 0 && x < w && y < h) m[y * w + x] = 1;
+    }
+  }
+  return m;
+}
+
+/** Mask of the pixels a placed piece (placeFloating) covers once it is put down. */
+export function floatingMask(w: number, h: number, placed: { piece: Bitmap; x: number; y: number }): Mask {
+  const { piece } = placed;
   const m = new Uint8Array(w * h);
   for (let y = 0; y < piece.h; y++) {
     for (let x = 0; x < piece.w; x++) {
-      const X = f.x + x, Y = f.y + y;
+      const X = placed.x + x, Y = placed.y + y;
       if (X >= 0 && Y >= 0 && X < w && Y < h && piece.px[(y * piece.w + x) * 4 + 3]) m[Y * w + X] = 1;
     }
   }

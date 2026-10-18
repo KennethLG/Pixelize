@@ -51,9 +51,10 @@ A step-by-step flow: **Image → Pixels → Colors → Background & crop → Tou
 ## Sprite editor
 
 - **Drawing:** pencil (with a *pixel perfect* mode), eraser, line, rectangle, ellipse, paint bucket (fill an area or replace a color everywhere), eyedropper, and an in-app color picker. Brush sizes, symmetry (left/right, top/bottom) and a **tile mode** that wraps strokes around the edges.
-- **Selections:** rectangle and by color; move, scale, flip and rotate them; cut, copy and paste (also images from other apps). One-click **outline** around the art.
+- **Selections:** rectangle, **lasso** and by color; move, scale and flip them, or **turn them by any angle around a pivot** (a shoulder, a hip) with RotSprite so the lines stay clean; carry the selected piece into the next or previous frame to pose it step by step; cut, copy and paste (also images from other apps). One-click **outline** around the art.
 - **Smart palette:** hue-shifted **ramps** built from any color, a **shading brush** that steps one shade lighter or darker along them, and a **palette lock** that keeps everything you paint inside your palette.
 - **Animation:** a layers × frames **timeline**, cels you can copy into other frames, **tags** (idle, walk…) with their own playback direction, **mirrored** copies of a walk cycle, a full **onion skin**, a quick flip to the previous frame, and a floating **preview at game scale** over a background image.
+- **Posable parts:** make a limb layer a **part** with a joint and a parent (forearm hangs from the upper arm), then pose it in each frame with the **Pose tool** instead of redrawing it: drag to turn it around the joint (RotSprite keeps the lines clean), Alt-drag to move it, and children follow. Painting on a part in its rest pose updates every frame.
 - **Check:** finds orphan pixels, jaggies, banding and colors that are almost the same, and takes you to each one.
 - **Variants:** color swaps of the whole sprite (red team, blue team, elite) exported all at once.
 - **Layers** with opacity and **reference images** that are never exported, a resizable canvas, and `.pixelize` project files.

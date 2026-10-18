@@ -3,9 +3,11 @@
 import { flip, newBitmap, outline, rotate90, scaleNearest } from '../../core/bitmap';
 import type { RGBA } from '../../core/color';
 import { addLayer } from '../../core/sprite';
+import { bakePart, freeFrame, makePart, REST, setParent, setPose, syncParts } from '../../core/parts';
+import { placeFloating } from '../../core/rotsprite';
 import { setStatus } from '../dom';
 import { decodeFile } from '../input';
-import { cel, commitFloating, emit, lift, pushCel, pushDoc, setColor, sp } from './state';
+import { cel, commitFloating, emit, lift, pushCel, pushDoc, setColor, sp, type Float } from './state';
 
 export function setBrush(n: number): void {
   sp.brush = Math.max(1, Math.min(32, Math.round(n) || 1));
@@ -27,6 +29,7 @@ export function setTileMode(on: boolean): void {
 export function transform(fn: (w: number, h: number) => [number, number] | 'flipH' | 'flipV' | 'rotCW' | 'rotCCW' | 'rot180'): void {
   const f = lift();
   if (!f) return;
+  bakeTurn(f);
   const r = fn(f.w, f.h);
   const shown = () => (f.w === f.src.w && f.h === f.src.h ? f.src : scaleNearest(f.src, f.w, f.h));
   if (r === 'flipH' || r === 'flipV') {
@@ -49,6 +52,53 @@ export function transform(fn: (w: number, h: number) => [number, number] | 'flip
     f.w = w;
     f.h = h;
   }
+  emit('pixels', 'selection');
+}
+
+// ---------- parts (layers posed frame by frame, core/parts.ts) ----------
+
+/** Runs a change to the current layer's part with undo, after taking in what was painted. */
+function partChange(fn: () => void): void {
+  commitFloating();
+  syncParts(sp.doc);
+  pushDoc();
+  fn();
+  emit('structure', 'pixels');
+}
+
+export const makeLayerPart = () => partChange(() => makePart(sp.doc, sp.layer, sp.frame));
+export const bakeLayerPart = () => partChange(() => bakePart(sp.doc, sp.layer));
+export const restPose = () => partChange(() => setPose(sp.doc, sp.frame, sp.layer, REST));
+export const freePose = () => partChange(() => freeFrame(sp.doc, sp.frame, sp.layer));
+export function setLayerParent(parentId: string | null): void {
+  partChange(() => { if (!setParent(sp.doc, sp.layer, parentId)) setStatus('That would make a loop of parts.', true); });
+}
+
+/** Makes a turned piece's turn part of its pixels, so it can be scaled or flipped. */
+export function bakeTurn(f: Float): void {
+  if (!f.angle) return;
+  const p = placeFloating(f);
+  f.src = { w: p.piece.w, h: p.piece.h, px: p.piece.px.slice() };
+  f.x = p.x; f.y = p.y; f.w = p.piece.w; f.h = p.piece.h;
+  f.angle = 0;
+  delete f.pivot;
+}
+
+/** Turns the selection to `deg` degrees (clockwise), around its pivot, with RotSprite. */
+export function setAngle(deg: number): void {
+  const f = lift();
+  if (!f) return;
+  deg = ((Math.round(deg * 10) / 10) % 360 + 360) % 360;
+  f.angle = deg;
+  emit('pixels', 'selection');
+}
+
+/** Puts the turning point back in the middle of the piece. */
+export function resetPivot(): void {
+  const f = lift();
+  if (!f) return;
+  delete f.pivot;
+  sp.pivotAt = null;
   emit('pixels', 'selection');
 }
 

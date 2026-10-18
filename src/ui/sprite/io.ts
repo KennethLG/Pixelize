@@ -3,7 +3,8 @@
 // autosave that brings the last sprite back next time. No DOM lookups here:
 // the components pass in what the user typed.
 
-import { extract, newBitmap, renderFloating, type Bitmap } from '../../core/bitmap';
+import { extract, newBitmap, type Bitmap } from '../../core/bitmap';
+import { placeFloating } from '../../core/rotsprite';
 import { DEFAULT_DURATION, composite, createDoc, parseDoc, resizeCanvas, scaleDoc, serializeDoc, type SpriteDoc } from '../../core/sprite';
 import { playbackSequence } from '../../core/frames';
 import { encodeGif } from '../../export/gif';
@@ -198,7 +199,7 @@ let clip: { piece: Bitmap; x: number; y: number } | null = null;
 /** The selection (or floating piece, or whole layer) of the current layer. */
 function grab(): { piece: Bitmap; x: number; y: number } | null {
   const f = sp.floating;
-  if (f) return { piece: renderFloating(f), x: f.x, y: f.y };
+  if (f) return placeFloating(f);
   const got = extract(cel(), sp.mask);
   return got ? { piece: got.piece, x: got.box.x, y: got.box.y } : null;
 }

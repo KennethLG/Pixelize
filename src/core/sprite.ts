@@ -3,11 +3,16 @@
 
 import { flip, newBitmap, scaleNearest, type Bitmap } from './bitmap';
 import type { Direction } from './frames';
+import { bakePart, clonePart, clonePoses, duplicatePart, forgetPart, type Part, type Pose } from './parts';
 import type { Variant } from './shading';
 
-/** A reference layer is shown while drawing but left out of exports and of the colors in use. */
-export interface Layer { name: string; visible: boolean; opacity: number; ref?: boolean }
-export interface Frame { cels: Bitmap[]; duration: number }
+/**
+ * A reference layer is shown while drawing but left out of exports and of the
+ * colors in use. A layer with a part is posed frame by frame (core/parts.ts).
+ */
+export interface Layer { name: string; visible: boolean; opacity: number; ref?: boolean; part?: Part }
+/** `poses` holds the pose of each part (by part id) in this frame; parts without one are free here. */
+export interface Frame { cels: Bitmap[]; duration: number; poses?: Record<string, Pose> }
 /** A named run of frames (idle, walk…) with its own playback direction. `from`/`to` are frame indices, both included. */
 export interface Tag { name: string; from: number; to: number; dir: Direction; color: string }
 /** `variants` are color swaps of the whole sprite (red team, blue team…), see core/shading.ts. */
@@ -23,11 +28,18 @@ export function createDoc(w: number, h: number): SpriteDoc {
 
 export const cloneDoc = (d: SpriteDoc): SpriteDoc => ({
   w: d.w, h: d.h,
-  layers: d.layers.map((l) => ({ ...l })),
-  frames: d.frames.map((f) => ({ duration: f.duration, cels: f.cels.map((c) => ({ w: c.w, h: c.h, px: c.px.slice() })) })),
+  layers: d.layers.map((l) => (l.part ? { ...l, part: clonePart(l.part) } : { ...l })),
+  frames: d.frames.map((f) => withPoses({ duration: f.duration, cels: f.cels.map((c) => ({ w: c.w, h: c.h, px: c.px.slice() })) }, f.poses)),
   tags: (d.tags || []).map((t) => ({ ...t })),
   variants: (d.variants || []).map((v) => ({ name: v.name, map: { ...v.map } })),
 });
+
+/** Adds a copy of `poses` to a frame, when there are any. */
+function withPoses(f: Frame, poses?: Record<string, Pose>): Frame {
+  const p = clonePoses(poses);
+  if (p && Object.keys(p).length) f.poses = p;
+  return f;
+}
 
 const move = <T>(arr: T[], from: number, to: number) => { const [x] = arr.splice(from, 1); arr.splice(to, 0, x); };
 
@@ -48,10 +60,12 @@ export function addLayer(d: SpriteDoc, at: number, name = nextLayerName(d)): voi
 export function duplicateLayer(d: SpriteDoc, i: number): void {
   d.layers.splice(i + 1, 0, { ...d.layers[i], name: `${d.layers[i].name} copy` });
   for (const f of d.frames) f.cels.splice(i + 1, 0, { w: d.w, h: d.h, px: f.cels[i].px.slice() });
+  duplicatePart(d, i, i + 1);
 }
 
 export function removeLayer(d: SpriteDoc, i: number): boolean {
   if (d.layers.length < 2) return false;
+  forgetPart(d, i);
   d.layers.splice(i, 1);
   for (const f of d.frames) f.cels.splice(i, 1);
   return true;
@@ -67,6 +81,8 @@ export function moveLayer(d: SpriteDoc, from: number, to: number): void {
 export function mergeDown(d: SpriteDoc, i: number): boolean {
   if (i < 1) return false;
   const top = d.layers[i];
+  // merged pixels are plain pixels: the layer below stops being a part
+  bakePart(d, i - 1);
   for (const f of d.frames) {
     const below = f.cels[i - 1];
     if (top.visible) blendOver(below.px, f.cels[i].px, top.opacity);
@@ -93,7 +109,7 @@ export function addFrame(d: SpriteDoc, at: number): void {
 
 export function duplicateFrame(d: SpriteDoc, i: number): void {
   const f = d.frames[i];
-  d.frames.splice(i + 1, 0, { duration: f.duration, cels: f.cels.map((c) => ({ w: c.w, h: c.h, px: c.px.slice() })) });
+  d.frames.splice(i + 1, 0, withPoses({ duration: f.duration, cels: f.cels.map((c) => ({ w: c.w, h: c.h, px: c.px.slice() })) }, f.poses));
   // the copy belongs to the same tags as its original
   for (const t of d.tags) {
     if (t.from > i) t.from++;
@@ -178,7 +194,16 @@ export function resizeCanvas(d: SpriteDoc, w: number, h: number, ax = 0.5, ay = 
 
 /** Stretches every cel to w × h (nearest neighbor, so pixels stay crisp). */
 export function scaleDoc(d: SpriteDoc, w: number, h: number): void {
-  for (const f of d.frames) f.cels = f.cels.map((c) => scaleNearest(c, w, h));
+  const kx = w / d.w, ky = h / d.h;
+  for (const f of d.frames) {
+    f.cels = f.cels.map((c) => scaleNearest(c, w, h));
+    for (const p of Object.values(f.poses ?? {})) { p.x *= kx; p.y *= ky; }
+  }
+  for (const l of d.layers) {
+    if (!l.part) continue;
+    l.part.src = scaleNearest(l.part.src, w, h);
+    l.part.pivot = [l.part.pivot[0] * kx, l.part.pivot[1] * ky];
+  }
   d.w = w;
   d.h = h;
 }
@@ -189,19 +214,24 @@ export function scaleDoc(d: SpriteDoc, w: number, h: number): void {
  */
 export function cropCanvas(d: SpriteDoc, x0: number, y0: number, w: number, h: number): void {
   const dx = -x0, dy = -y0;
-  for (const f of d.frames) {
-    f.cels = f.cels.map((c) => {
-      const out = newBitmap(w, h);
-      for (let y = 0; y < c.h; y++) {
-        const Y = y + dy;
-        if (Y < 0 || Y >= h) continue;
-        for (let x = 0; x < c.w; x++) {
-          const X = x + dx;
-          if (X >= 0 && X < w) out.px.set(c.px.subarray((y * c.w + x) * 4, (y * c.w + x) * 4 + 4), (Y * w + X) * 4);
-        }
+  const cut = (c: Bitmap) => {
+    const out = newBitmap(w, h);
+    for (let y = 0; y < c.h; y++) {
+      const Y = y + dy;
+      if (Y < 0 || Y >= h) continue;
+      for (let x = 0; x < c.w; x++) {
+        const X = x + dx;
+        if (X >= 0 && X < w) out.px.set(c.px.subarray((y * c.w + x) * 4, (y * c.w + x) * 4 + 4), (Y * w + X) * 4);
       }
-      return out;
-    });
+    }
+    return out;
+  };
+  for (const f of d.frames) f.cels = f.cels.map(cut);
+  // parts move with the art; their poses are relative, so they stay as they are
+  for (const l of d.layers) {
+    if (!l.part) continue;
+    l.part.src = cut(l.part.src);
+    l.part.pivot = [l.part.pivot[0] + dx, l.part.pivot[1] + dy];
   }
   d.w = w;
   d.h = h;
@@ -256,7 +286,10 @@ export function usedColors(d: SpriteDoc): number[] {
 
 // ---------- saving (autosave and project files) ----------
 
-interface SavedDoc { v: 1; w: number; h: number; layers: Layer[]; frames: { duration: number; cels: string[] }[]; tags?: Tag[]; variants?: Variant[] }
+// Parts and poses were added later as optional fields, so older files still open.
+interface SavedPart { id: string; pivot: [number, number]; parent: string | null; src: string }
+interface SavedLayer { name: string; visible: boolean; opacity: number; ref?: boolean; part?: SavedPart }
+interface SavedDoc { v: 1; w: number; h: number; layers: SavedLayer[]; frames: { duration: number; cels: string[]; poses?: Record<string, Pose> }[]; tags?: Tag[]; variants?: Variant[] }
 
 const toB64 = (px: Uint8ClampedArray) => {
   let s = '';
@@ -266,7 +299,12 @@ const toB64 = (px: Uint8ClampedArray) => {
 const fromB64 = (s: string) => Uint8ClampedArray.from(atob(s), (ch) => ch.charCodeAt(0));
 
 export function serializeDoc(d: SpriteDoc): string {
-  const saved: SavedDoc = { v: 1, w: d.w, h: d.h, layers: d.layers, frames: d.frames.map((f) => ({ duration: f.duration, cels: f.cels.map((c) => toB64(c.px)) })), tags: d.tags, variants: d.variants };
+  const saved: SavedDoc = {
+    v: 1, w: d.w, h: d.h,
+    layers: d.layers.map((l) => (l.part ? { ...l, part: { id: l.part.id, pivot: l.part.pivot, parent: l.part.parent, src: toB64(l.part.src.px) } } : l) as SavedLayer),
+    frames: d.frames.map((f) => ({ duration: f.duration, cels: f.cels.map((c) => toB64(c.px)), ...(f.poses && Object.keys(f.poses).length ? { poses: f.poses } : {}) })),
+    tags: d.tags, variants: d.variants,
+  };
   return JSON.stringify(saved);
 }
 
@@ -289,19 +327,34 @@ function parseVariants(vs: unknown): Variant[] {
   }));
 }
 
+function parsePart(p: SavedPart, src: Bitmap): Part {
+  const pv = Array.isArray(p.pivot) && p.pivot.every((v) => Number.isFinite(v)) ? p.pivot : [src.w / 2, src.h / 2];
+  return { id: p.id, pivot: [pv[0], pv[1]], parent: typeof p.parent === 'string' ? p.parent : null, src };
+}
+
 export function parseDoc(text: string): SpriteDoc | null {
   try {
     const s = JSON.parse(text) as SavedDoc;
     if (s.v !== 1 || !(s.w > 0) || !(s.h > 0) || !s.layers?.length || !s.frames?.length) return null;
     const size = s.w * s.h * 4;
-    const frames = s.frames.map((f) => ({
-      duration: f.duration || DEFAULT_DURATION,
-      cels: s.layers.map((_, i) => {
-        const px = f.cels[i] ? fromB64(f.cels[i]) : new Uint8ClampedArray(size);
-        return { w: s.w, h: s.h, px: px.length === size ? px : new Uint8ClampedArray(size) };
-      }),
+    const bitmap = (b64?: string) => {
+      const px = b64 ? fromB64(b64) : new Uint8ClampedArray(size);
+      return { w: s.w, h: s.h, px: px.length === size ? px : new Uint8ClampedArray(size) };
+    };
+    const layers: Layer[] = s.layers.map((l) => ({
+      name: String(l.name), visible: l.visible !== false, opacity: Number.isFinite(+l.opacity) ? Math.max(0, Math.min(1, +l.opacity)) : 1,
+      ...(l.ref ? { ref: true } : {}),
+      ...(l.part && typeof l.part.id === 'string' ? { part: parsePart(l.part, bitmap(l.part.src)) } : {}),
     }));
-    return { w: s.w, h: s.h, layers: s.layers.map((l) => ({ name: String(l.name), visible: l.visible !== false, opacity: Number.isFinite(+l.opacity) ? Math.max(0, Math.min(1, +l.opacity)) : 1, ...(l.ref ? { ref: true } : {}) })), frames, tags: parseTags(s.tags, frames.length), variants: parseVariants(s.variants) };
+    const ids = new Set(layers.flatMap((l) => (l.part ? [l.part.id] : [])));
+    for (const l of layers) if (l.part?.parent && !ids.has(l.part.parent)) l.part.parent = null;
+    const frames: Frame[] = s.frames.map((f) => {
+      const frame: Frame = { duration: f.duration || DEFAULT_DURATION, cels: s.layers.map((_, i) => bitmap(f.cels[i])) };
+      const poses = Object.entries(f.poses ?? {}).filter(([id, p]) => ids.has(id) && [p?.x, p?.y, p?.angle].every((v) => Number.isFinite(v)));
+      if (poses.length) frame.poses = Object.fromEntries(poses.map(([id, p]) => [id, { x: p.x, y: p.y, angle: p.angle }]));
+      return frame;
+    });
+    return { w: s.w, h: s.h, layers, frames, tags: parseTags(s.tags, frames.length), variants: parseVariants(s.variants) };
   } catch {
     return null;
   }

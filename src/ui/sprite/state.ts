@@ -16,15 +16,17 @@
 //   playframe the playing preview moved to another frame
 
 import {
-  blit, clearMasked, extract, floatingMask, renderFloating, type Bitmap, type Floating, type Mask,
+  blit, clearMasked, extract, floatingMask, type Bitmap, type Floating, type Mask,
 } from '../../core/bitmap';
 import type { RGB, RGBA } from '../../core/color';
 import type { LintIssue } from '../../core/lint';
+import { syncParts } from '../../core/parts';
+import { placeFloating } from '../../core/rotsprite';
 import { cloneDoc, createDoc, type SpriteDoc } from '../../core/sprite';
 import { createBus } from '../bus';
 
 export type SpEvent = 'pixels' | 'structure' | 'cursor' | 'selection' | 'color' | 'tool' | 'paper' | 'view' | 'hover' | 'palette' | 'playback' | 'playframe';
-export type Tool = 'pan' | 'pencil' | 'eraser' | 'line' | 'shade' | 'bucket' | 'picker' | 'rect' | 'ellipse' | 'select' | 'wand' | 'move' | 'canvas';
+export type Tool = 'pan' | 'pencil' | 'eraser' | 'line' | 'shade' | 'bucket' | 'picker' | 'rect' | 'ellipse' | 'select' | 'lasso' | 'wand' | 'move' | 'pose' | 'canvas';
 
 /** A floating piece also remembers its layer, frame, and the cel before it was lifted (for undo). */
 export interface Float extends Floating { frame: number; layer: number; before: Uint8ClampedArray }
@@ -90,6 +92,8 @@ export const sp = {
   previewBg: 'checker' as 'checker' | 'paper' | 'image',
   /** the current layer's cel with a shape still being dragged out (rectangle tool) */
   preview: null as Bitmap | null,
+  /** where the last piece put down turned (sprite pixels), so lifting it again keeps its pivot (a shoulder, a hip) */
+  pivotAt: null as [number, number] | null,
   name: 'sprite',
 };
 
@@ -182,6 +186,8 @@ export function lift(): Float | null {
   const before = c.px.slice();
   clearMasked(c, sp.mask);
   sp.floating = { src: got.piece, x: got.box.x, y: got.box.y, w: got.box.w, h: got.box.h, frame: sp.frame, layer: sp.layer, before };
+  const p = sp.pivotAt, b = got.box;
+  if (p && p[0] >= b.x && p[1] >= b.y && p[0] <= b.x + b.w && p[1] <= b.y + b.h) sp.floating.pivot = [(p[0] - b.x) / b.w, (p[1] - b.y) / b.h];
   return sp.floating;
 }
 
@@ -198,16 +204,39 @@ export function commitFloating(): void {
   const f = sp.floating;
   if (!f) return;
   sp.floating = null;
+  sp.pivotAt = f.pivot ? [f.x + f.pivot[0] * f.w, f.y + f.pivot[1] * f.h] : null;
   const c = cel(f.frame, f.layer);
-  blit(c, renderFloating(f), f.x, f.y);
+  const placed = placeFloating(f);
+  blit(c, placed.piece, placed.x, placed.y);
   pushCel(f.frame, f.layer, f.before);
-  sp.mask = floatingMask(sp.doc.w, sp.doc.h, f);
+  sp.mask = floatingMask(sp.doc.w, sp.doc.h, placed);
   if (!sp.mask.some((v) => v)) sp.mask = null;
   emit('pixels', 'selection');
 }
 
+/**
+ * Takes the floating piece (lifting the selection first) to another frame,
+ * keeping its place, size and turn, so a pose can be carried on frame by frame.
+ * `copy` leaves the original frame as it was; otherwise the piece is cut out of it.
+ */
+export function carryFloating(to: number, copy: boolean): void {
+  to = Math.max(0, Math.min(sp.doc.frames.length - 1, to));
+  if (to === sp.frame || !(sp.mask || sp.floating)) return;
+  const f = lift();
+  if (!f) return;
+  const src = cel(f.frame, f.layer);
+  if (copy) src.px.set(f.before);
+  else pushCel(f.frame, f.layer, f.before);
+  f.frame = to;
+  f.before = cel(to, f.layer).px.slice();
+  sp.frame = to;
+  sp.layer = f.layer;
+  emit('cursor', 'pixels', 'selection');
+}
+
 export function deselect(): void {
   commitFloating();
+  sp.pivotAt = null;
   if (!sp.mask) return;
   sp.mask = null;
   emit('selection');
@@ -220,7 +249,8 @@ export function liveCel(): Bitmap | null {
   if (!f || f.frame !== sp.frame) return null;
   const c = cel(sp.frame, f.layer);
   const out = { w: c.w, h: c.h, px: c.px.slice() };
-  blit(out, renderFloating(f), f.x, f.y);
+  const placed = placeFloating(f);
+  blit(out, placed.piece, placed.x, placed.y);
   return out;
 }
 
@@ -235,6 +265,7 @@ export function setDoc(doc: SpriteDoc, name = sp.name): void {
   sp.layer = Math.min(sp.layer, doc.layers.length - 1);
   sp.mask = null;
   sp.preview = null;
+  sp.pivotAt = null;
   sp.name = name;
   resetHistory();
   emit('structure', 'cursor', 'pixels', 'selection');
@@ -244,6 +275,8 @@ export function setFrame(i: number): void {
   i = Math.max(0, Math.min(sp.doc.frames.length - 1, i));
   if (i === sp.frame) return;
   commitFloating();
+  // painting on a part in its rest pose reaches the other frames now
+  syncParts(sp.doc);
   sp.frame = i;
   emit('cursor', 'pixels');
 }
@@ -257,7 +290,7 @@ export function setLayer(i: number): void {
 }
 
 export function setTool(t: Tool): void {
-  if (!['select', 'wand', 'move', 'pan'].includes(t)) commitFloating();
+  if (!['select', 'lasso', 'wand', 'move', 'pan'].includes(t)) commitFloating();
   if (t === 'canvas') deselect();
   sp.tool = t;
   emit('tool');

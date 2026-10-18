@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   blit, boxOf, clearMasked, colorMask, combineMasks, drawEllipse, drawLine, drawRect, extract, fill, flip, floatingMask,
   getPixel, isLCorner, maskBounds, newBitmap, outline, pixelPerfect, plot, rectMask, replaceColor, rotate90, scaleNearest,
-  snapAngle, stamp, type Bitmap,
+  polygonMask, snapAngle, stamp, type Bitmap,
 } from '../src/core/bitmap';
+import { placeFloating, rotsprite, scale2x } from '../src/core/rotsprite';
 import {
   addFrame, addLayer, addTag, composite, createDoc, cropCanvas, duplicateFrame, mergeDown, mirrorFrames, moveFrame, moveLayer, parseDoc,
   removeFrame, removeLayer, resizeCanvas, scaleDoc, serializeDoc, tagAt, translateBitmap, usedColors, type SpriteDoc,
@@ -220,7 +221,51 @@ describe('floating pieces', () => {
   it('the footprint of a floating piece only counts opaque pixels', () => {
     const p = newBitmap(2, 2);
     p.px.set(RED, 0);
-    expect(sum(floatingMask(4, 4, { src: p, x: 1, y: 1, w: 4, h: 4 }))).toBe(4);
+    expect(sum(floatingMask(4, 4, placeFloating({ src: p, x: 1, y: 1, w: 4, h: 4 })))).toBe(4);
+  });
+
+  it('the lasso selects the pixels inside the outline and on it', () => {
+    const square = polygonMask(10, 10, [[2, 2], [6, 2], [6, 6], [2, 6]]);
+    expect(sum(square)).toBeGreaterThanOrEqual(16);
+    expect(square[3 * 10 + 3]).toBe(1);
+    expect(square[8 * 10 + 8]).toBe(0);
+    // a triangle leaves the far corner out
+    const tri = polygonMask(10, 10, [[0, 0], [9.9, 0], [0, 9.9]]);
+    expect(tri[1 * 10 + 1]).toBe(1);
+    expect(tri[9 * 10 + 9]).toBe(0);
+  });
+});
+
+describe('rotsprite', () => {
+  const bar = () => { const b = newBitmap(5, 1); for (let x = 0; x < 5; x++) b.px.set(RED, x * 4); return b; };
+
+  it('scale2x doubles and keeps a lone pixel square', () => {
+    const b = newBitmap(1, 1);
+    b.px.set(RED, 0);
+    const s = scale2x(b);
+    expect([s.w, s.h, count(s)]).toEqual([2, 2, 4]);
+  });
+
+  it('turns a quarter exactly and adds no colors', () => {
+    const r = rotsprite(bar(), 90, 2.5, 0.5);
+    expect([r.piece.w, r.piece.h, count(r.piece)]).toEqual([1, 5, 5]);
+    expect([r.x, r.y]).toEqual([2, -2]);
+    expect(rotsprite(bar(), 0, 0, 0).piece.w).toBe(5);
+  });
+
+  it('turns by any angle around the pivot without breaking the line', () => {
+    const r = rotsprite(bar(), 45, 0.5, 0.5);
+    const n = count(r.piece);
+    expect(n).toBeGreaterThanOrEqual(3);
+    expect(n).toBeLessThanOrEqual(6);
+    for (let i = 0; i < r.piece.px.length; i += 4) if (r.piece.px[i + 3]) expect([...r.piece.px.subarray(i, i + 4)]).toEqual(RED);
+    // the pivot pixel stays where it was
+    expect(getPixel(r.piece, -r.x, -r.y)).toEqual(RED);
+  });
+
+  it('places a turned floating piece', () => {
+    const p = placeFloating({ src: bar(), x: 3, y: 3, w: 5, h: 1, angle: 90, pivot: [0.5, 0.5] });
+    expect([p.x, p.y, p.piece.w, p.piece.h]).toEqual([5, 1, 1, 5]);
   });
 });
 

@@ -3,13 +3,19 @@
 // selection (or, with the Move tool, the layer), and with Alt the whole frame.
 
 import { actionFor, releases } from '../keys';
-import { deleteSelection, setBrush, swapColors } from './actions';
+import { deleteSelection, setAngle, setBrush, swapColors } from './actions';
 import { copyCel, endPeek, newFrame, pasteCel, shiftFrame, startPeek, togglePlay } from './animation';
 import { fitView, nudge, selectAll, setSpaceHeld, zoomStep } from './canvas';
 import { copy, cut } from './io';
-import { commitFloating, deselect, emit, redo, setFrame, setTool, sp, undo, type Tool } from './state';
+import { carryFloating, commitFloating, deselect, emit, redo, setFrame, setTool, sp, undo, type Tool } from './state';
 
-const TOOLS: Tool[] = ['pencil', 'eraser', 'line', 'shade', 'bucket', 'rect', 'ellipse', 'picker', 'select', 'wand', 'move', 'canvas', 'pan'];
+const TOOLS: Tool[] = ['pencil', 'eraser', 'line', 'shade', 'bucket', 'rect', 'ellipse', 'picker', 'select', 'lasso', 'wand', 'move', 'pose', 'canvas', 'pan'];
+
+/** Turns the selection by a step, when there is one. */
+function turnBy(deg: number): void {
+  if (!sp.mask && !sp.floating) return;
+  setAngle((sp.floating?.angle ?? 0) + deg);
+}
 
 const RUN: Record<string, () => void> = {
   swapColors,
@@ -18,6 +24,8 @@ const RUN: Record<string, () => void> = {
   undo, redo, copy, cut, selectAll, deselect,
   delete: deleteSelection,
   apply: () => { if (sp.floating) commitFloating(); },
+  turnLeft: () => turnBy(-15),
+  turnRight: () => turnBy(15),
   zoomIn: () => zoomStep(1),
   zoomOut: () => zoomStep(-1),
   fit: fitView,
@@ -28,6 +36,10 @@ const RUN: Record<string, () => void> = {
   newFrame: () => newFrame(false),
   dupFrame: () => newFrame(true),
   copyCel, pasteCel,
+  carryNext: () => carryFloating(sp.frame + 1, true),
+  carryPrev: () => carryFloating(sp.frame - 1, true),
+  moveNext: () => carryFloating(sp.frame + 1, false),
+  movePrev: () => carryFloating(sp.frame - 1, false),
 };
 
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
