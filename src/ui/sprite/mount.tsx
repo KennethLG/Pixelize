@@ -1,11 +1,7 @@
-// Starts the sprite editor: preferences, the last sprite, global handlers, and
-// the React tree inside #spriteMode.
+// Starts the sprite editor's non-visual parts: preferences, the last sprite,
+// paste/drop and shortcuts. The editor itself is rendered by App.
 
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import { $ } from '../dom';
 import { draw } from './canvas';
-import { SpriteEditor } from './components/SpriteEditor';
 import { initIo, restore } from './io';
 import { loadPrefs } from './prefs';
 import { initShortcuts } from './shortcuts';
@@ -16,7 +12,6 @@ export function initSprite(isActive: () => boolean): void {
   restore();
   initIo(isActive);
   initShortcuts(isActive);
-  createRoot($('spriteMode')).render(<StrictMode><SpriteEditor /></StrictMode>);
 }
 
 /** The editor state, for checks from the browser console. */

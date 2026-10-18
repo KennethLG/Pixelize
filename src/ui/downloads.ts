@@ -2,8 +2,9 @@
 // `downloads` capability (it asks the viewer to confirm); opened as a local
 // file, a normal download link works.
 
-import { app, onResult } from './app';
-import { $, int, setStatus } from './dom';
+import { app } from './app';
+import { setStatus } from './dom';
+import { settings } from './settings';
 
 interface DownloadsApi { save(req: { filename: string; data: Blob }): Promise<unknown> }
 declare global {
@@ -15,7 +16,7 @@ let downloadsReady: Promise<void> | null = null;
 
 export const baseName = () =>
   (app.source?.name || 'pixelart').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_') || 'pixelart';
-export const scaleValue = () => Math.max(1, Math.min(64, int('scale') || 1));
+export const scaleValue = () => Math.max(1, Math.min(64, Math.round(settings.scale) || 1));
 
 export const canvasBlob = (c: HTMLCanvasElement) => new Promise<Blob>((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('Could not encode the PNG.'))), 'image/png'));
 export const canvasBytes = async (c: HTMLCanvasElement) => new Uint8Array(await (await canvasBlob(c)).arrayBuffer());
@@ -55,13 +56,11 @@ export async function saveBlob(blob: Blob, filename: string): Promise<void> {
   setStatus(`Saved ${filename}`);
 }
 
-async function downloadResult(scale: number): Promise<void> {
+export async function downloadResult(scale: number): Promise<void> {
   if (!app.result) return;
   const filename = scale === 1 ? `${baseName()}_pixel.png` : `${baseName()}_pixel_x${scale}.png`;
   await saveBlob(await canvasBlob(scaledCanvas(app.resultCanvas, scale)), filename);
 }
-
-const updateLabel = () => { $('dlN').textContent = `PNG ×${scaleValue()}`; };
 
 export function initDownloads(): void {
   if (window.claude && typeof window.claude.use === 'function') {
@@ -70,8 +69,4 @@ export function initDownloads(): void {
       () => { downloads = null; },
     );
   }
-  $('dl1').addEventListener('click', () => downloadResult(1));
-  $('dlN').addEventListener('click', () => downloadResult(scaleValue()));
-  $('scale').addEventListener('input', updateLabel);
-  onResult(updateLabel);
 }

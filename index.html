@@ -9,42 +9,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
 </head>
 <body data-step="image" data-mode="pixelize">
-<div class="wrap">
-  <!-- @include header.html -->
-
-  <div id="pixelizeMode">
-  <!-- @include pixelize/steps.html -->
-
-  <div class="app">
-    <aside class="side">
-      <!-- @include pixelize/1-image.html -->
-
-      <!-- @include pixelize/2-pixels.html -->
-
-      <!-- @include pixelize/3-colors.html -->
-
-      <!-- @include pixelize/4-background.html -->
-
-      <!-- @include pixelize/5-touch-up.html -->
-
-      <!-- @include pixelize/6-animation.html -->
-
-      <!-- @include pixelize/7-export.html -->
-
-      <div class="stepnav">
-        <button type="button" class="ghost" id="backBtn">Back</button>
-        <button type="button" id="nextBtn">Next</button>
-      </div>
-      <p class="status" id="status" role="status"></p>
-    </aside>
-
-    <!-- @include pixelize/workspace.html -->
-  </div>
-  </div>
-
-  <!-- ===== Sprite editor (React: src/ui/sprite/components) ===== -->
-  <div id="spriteMode" class="sprite" hidden></div>
-</div>
-<script type="module" src="/src/main.ts"></script>
+<div id="root"></div>
+<script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

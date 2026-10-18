@@ -1,37 +1,41 @@
-// The result editor: zoom/pan view, pixel grid, before/after split, and the
-// drawing tools. Edits live in app.edits, on top of the processed base.
+// The result editor engine: zoom/pan view, pixel grid, before/after split, and
+// the drawing tools. Edits live in app.edits, on top of the processed base.
+// Imperative on purpose; the ResultView component attaches it with
+// attachEditor() and shows the state below.
 
-import { hex, hexToRgb, keyAt, type RGB, type RGBA } from '../core/color';
-import { app, canRedo, canUndo, commitEdits, onResult, onSource, pushUndo, redo, schedule, undo } from './app';
-import { $, cssVar, field, isChecked, num } from './dom';
-import { saveSettings } from './settings';
+import { hex, keyAt, type RGB, type RGBA } from '../core/color';
+import { app, commitEdits, pushUndo, pxBus, redo, schedule, undo } from './app';
+import { cssVar } from './dom';
 import { currentMode } from './mode';
-import { currentStep, onStep } from './steps';
+import { setSettings, settings } from './settings';
+import { currentStep } from './steps';
 
-type Tool = 'pan' | 'pencil' | 'eraser' | 'fill' | 'picker' | 'bg';
+export type EditTool = 'pan' | 'pencil' | 'eraser' | 'fill' | 'picker' | 'bg';
 
-const stage = () => $('editStage');
-const canvas = () => $<HTMLCanvasElement>('editCanvas');
+/** What the components show: tool, drawing color and zoom. Changes emit 'editor'. */
+export const ed = { tool: 'pan' as EditTool, color: [27, 21, 48] as RGB, zoom: 1 };
+
+let stageEl: HTMLElement | null = null;
+let canvasEl: HTMLCanvasElement | null = null;
 const view = { zoom: 1, ox: 0, oy: 0, cw: 0, ch: 0, dpr: 1 };
 let fittedDims = '';     // result size the view was last fitted to
 let viewTouched = false; // the user zoomed or panned since the last fit
-let tool: Tool = 'pan';
-let drawColor: RGB = [27, 21, 48];
 let hover: { x: number; y: number } | null = null;
 let spaceHeld = false;
 
 // ---------- view ----------
 
 function sizeEditor(): void {
-  const r = stage().getBoundingClientRect();
+  if (!stageEl || !canvasEl) return;
+  const r = stageEl.getBoundingClientRect();
   if (!r.width || !r.height) return;
   view.dpr = window.devicePixelRatio || 1;
   // keep what was centered centered; refit if the view was never touched
   if (view.cw) { view.ox += (r.width - view.cw) / 2; view.oy += (r.height - view.ch) / 2; }
   view.cw = r.width;
   view.ch = r.height;
-  canvas().width = Math.max(1, Math.round(r.width * view.dpr));
-  canvas().height = Math.max(1, Math.round(r.height * view.dpr));
+  canvasEl.width = Math.max(1, Math.round(r.width * view.dpr));
+  canvasEl.height = Math.max(1, Math.round(r.height * view.dpr));
   if (!viewTouched) fittedDims = '';
   draw();
 }
@@ -42,22 +46,24 @@ function setZoom(z: number, at: [number, number] | null): void {
   view.ox = cx - ((cx - view.ox) * z) / view.zoom;
   view.oy = cy - ((cy - view.oy) * z) / view.zoom;
   view.zoom = z;
-  $('zoomLabel').textContent = `${Math.round(z * 100)}%`;
+  if (ed.zoom !== z) { ed.zoom = z; pxBus.emit('editor'); }
 }
 
 function fitView(): void {
   const res = app.result;
   if (!res || !view.cw) return;
+  fittedDims = `${res.width}x${res.height}`;
   let z = Math.min((view.cw - 24) / res.width, (view.ch - 24) / res.height);
   if (z >= 1) z = Math.floor(z);
   setZoom(z, null);
   view.ox = Math.round((view.cw - res.width * view.zoom) / 2);
   view.oy = Math.round((view.ch - res.height * view.zoom) / 2);
-  fittedDims = `${res.width}x${res.height}`;
   viewTouched = false;
 }
 
-function zoomStep(dir: 1 | -1, at: [number, number] | null): void {
+export function refit(): void { fittedDims = ''; draw(); }
+
+export function zoomStep(dir: 1 | -1, at: [number, number] | null = null): void {
   const steps = [0.25, 0.5, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 80];
   const z = view.zoom;
   const next = dir > 0 ? steps.find((s) => s > z + 1e-6) : [...steps].reverse().find((s) => s < z - 1e-6);
@@ -67,7 +73,8 @@ function zoomStep(dir: 1 | -1, at: [number, number] | null): void {
 }
 
 export function draw(): void {
-  const ctx = canvas().getContext('2d')!;
+  if (!canvasEl) return;
+  const ctx = canvasEl.getContext('2d')!;
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   ctx.clearRect(0, 0, view.cw, view.ch);
   const res = app.result;
@@ -78,8 +85,9 @@ export function draw(): void {
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(app.resultCanvas, ox, oy, W, H);
 
-  if (isChecked('compare') && app.source && app.base) {
-    const sx = (view.cw * num('split')) / 100;
+  const compare = settings.compare && ['colors', 'clean', 'edit'].includes(currentStep());
+  if (compare && app.source && app.base) {
+    const sx = (view.cw * settings.split) / 100;
     // the part of the original that the (maybe cropped) result covers
     const { xs, ys } = app.base.grid, c = app.base.crop;
     const x0 = xs[c.x], y0 = ys[c.y], x1 = xs[c.x + c.w], y1 = ys[c.y + c.h];
@@ -104,7 +112,7 @@ export function draw(): void {
     if (sx < view.cw - 60) tag('AFTER', sx + 6);
   }
 
-  if (isChecked('pixGrid') && z >= 6) {
+  if (settings.pixGrid && z >= 6) {
     ctx.strokeStyle = cssVar('--pixgrid');
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -115,7 +123,7 @@ export function draw(): void {
     ctx.stroke();
   }
 
-  if (hover && tool !== 'pan' && !spaceHeld && inBounds(hover)) {
+  if (hover && ed.tool !== 'pan' && !spaceHeld && inBounds(hover)) {
     ctx.strokeStyle = cssVar('--accent');
     ctx.lineWidth = 2;
     ctx.strokeRect(ox + hover.x * z + 1, oy + hover.y * z + 1, Math.max(2, z - 2), Math.max(2, z - 2));
@@ -124,22 +132,28 @@ export function draw(): void {
 
 // ---------- tools ----------
 
-function setTool(t: Tool): void {
-  tool = t;
-  document.querySelectorAll<HTMLElement>('.tool').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === t)));
-  stage().classList.toggle('pan', t === 'pan');
-  stage().classList.toggle('draw', t !== 'pan');
+const panning = () => ed.tool === 'pan' || spaceHeld;
+function updateStageClasses(): void {
+  stageEl?.classList.toggle('pan', panning());
+  stageEl?.classList.toggle('draw', !panning());
+}
+
+export function setTool(t: EditTool): void {
+  ed.tool = t;
+  updateStageClasses();
+  pxBus.emit('editor');
   draw();
 }
 
 export function setDrawColor(rgb: RGB): void {
-  drawColor = [rgb[0], rgb[1], rgb[2]];
-  field('drawColor').value = hex(drawColor);
-  $('drawHex').textContent = hex(drawColor);
+  ed.color = [rgb[0], rgb[1], rgb[2]];
+  pxBus.emit('editor');
 }
 
+export const drawHex = () => hex(ed.color);
+
 function pixelAt(e: PointerEvent | MouseEvent) {
-  const r = canvas().getBoundingClientRect();
+  const r = canvasEl!.getBoundingClientRect();
   return { x: Math.floor((e.clientX - r.left - view.ox) / view.zoom), y: Math.floor((e.clientY - r.top - view.oy) / view.zoom) };
 }
 const inBounds = (p: { x: number; y: number }) => {
@@ -158,7 +172,7 @@ function setPixel(x: number, y: number, rgba: RGBA): void {
 
 function paintLine(a: { x: number; y: number }, b: { x: number; y: number }): void {
   const res = app.result!;
-  const rgba: RGBA = tool === 'eraser' ? [0, 0, 0, 0] : [...drawColor, 255];
+  const rgba: RGBA = ed.tool === 'eraser' ? [0, 0, 0, 0] : [...ed.color, 255];
   let x0 = a.x, y0 = a.y;
   const dx = Math.abs(b.x - x0), dy = -Math.abs(b.y - y0), sx = x0 < b.x ? 1 : -1, sy = y0 < b.y ? 1 : -1;
   let err = dx + dy;
@@ -176,7 +190,7 @@ function floodFill(p: { x: number; y: number }): void {
   const { width: w, height: h, pixels: px } = app.result!;
   const i0 = (p.y * w + p.x) * 4;
   const target = [px[i0], px[i0 + 1], px[i0 + 2], px[i0 + 3]];
-  const rgba: RGBA = [...drawColor, 255];
+  const rgba: RGBA = [...ed.color, 255];
   if (target.every((v, k) => v === rgba[k])) return;
   const same = (i: number) => px[i] === target[0] && px[i + 1] === target[1] && px[i + 2] === target[2] && px[i + 3] === target[3];
   pushUndo();
@@ -190,12 +204,11 @@ function floodFill(p: { x: number; y: number }): void {
   commitEdits();
 }
 
-function updateEditUI(): void {
-  const n = app.edits.size;
-  $('editInfo').textContent = n ? `${n} pixel${n === 1 ? '' : 's'} edited` : 'No pixel edits';
-  field('undoBtn').disabled = !canUndo();
-  field('redoBtn').disabled = !canRedo();
-  field('clearEdits').disabled = !n;
+export function clearEdits(): void {
+  if (!app.edits.size) return;
+  pushUndo();
+  app.edits = new Map();
+  commitEdits();
 }
 
 // ---------- pointer and keyboard ----------
@@ -204,36 +217,34 @@ let gesture: { type: 'pan'; x: number; y: number } | { type: 'paint'; last: { x:
 
 function onPointerDown(e: PointerEvent): void {
   if (!app.result || !app.base) return;
-  canvas().setPointerCapture(e.pointerId);
+  canvasEl!.setPointerCapture(e.pointerId);
   const p = pixelAt(e);
-  if (e.button === 1 || tool === 'pan' || spaceHeld) {
+  if (e.button === 1 || panning()) {
     gesture = { type: 'pan', x: e.clientX, y: e.clientY };
-    stage().classList.add('panning');
+    stageEl!.classList.add('panning');
     e.preventDefault();
     return;
   }
   if (e.button !== 0 || !inBounds(p)) return;
   const res = app.result, base = app.base;
-  if (tool === 'pencil' || tool === 'eraser') {
+  if (ed.tool === 'pencil' || ed.tool === 'eraser') {
     pushUndo();
     gesture = { type: 'paint', last: p };
     paintLine(p, p);
     draw();
-  } else if (tool === 'fill') {
+  } else if (ed.tool === 'fill') {
     floodFill(p);
-  } else if (tool === 'picker') {
+  } else if (ed.tool === 'picker') {
     const i = (p.y * res.width + p.x) * 4;
     if (res.pixels[i + 3]) { setDrawColor([res.pixels[i], res.pixels[i + 1], res.pixels[i + 2]]); setTool('pencil'); }
-  } else if (tool === 'bg') {
+  } else if (ed.tool === 'bg') {
     // preBg is the uncropped image, so the pick is stored in its coordinates
     const x = p.x + base.crop.x, y = p.y + base.crop.y;
     const i = (y * base.fullW + x) * 4;
     if (base.preBg[i + 3]) {
       app.bgPick = { key: keyAt(base.preBg, i), x, y };
-      field('removeBg').checked = true;
-      field('removeBg').dispatchEvent(new Event('change'));
       setTool('pan');
-      saveSettings();
+      setSettings({ removeBg: true });
       schedule();
     }
   }
@@ -258,7 +269,7 @@ function onPointerMove(e: PointerEvent): void {
 function endGesture(): void {
   if (gesture?.type === 'paint') commitEdits();
   gesture = null;
-  stage().classList.remove('panning');
+  stageEl?.classList.remove('panning');
 }
 
 function onKeyDown(e: KeyboardEvent): void {
@@ -273,66 +284,67 @@ function onKeyDown(e: KeyboardEvent): void {
   // the result view only shows on these steps, and the tools only on "Touch up"
   const step = currentStep();
   if (!['grid', 'colors', 'clean', 'edit', 'export'].includes(step)) return;
-  const tools: Record<string, Tool> = { h: 'pan', b: 'pencil', e: 'eraser', g: 'fill', i: 'picker' };
+  const tools: Record<string, EditTool> = { h: 'pan', b: 'pencil', e: 'eraser', g: 'fill', i: 'picker' };
   if (tools[k]) { if (step === 'edit') setTool(tools[k]); }
-  else if (k === '+' || k === '=') zoomStep(1, null);
-  else if (k === '-') zoomStep(-1, null);
-  else if (k === '0') { fittedDims = ''; draw(); }
-  else if (e.key === ' ' && stage().matches(':hover')) {
+  else if (k === '+' || k === '=') zoomStep(1);
+  else if (k === '-') zoomStep(-1);
+  else if (k === '0') refit();
+  else if (e.key === ' ' && stageEl?.matches(':hover')) {
     e.preventDefault();
-    if (!spaceHeld) { spaceHeld = true; stage().classList.add('pan'); draw(); }
+    if (!spaceHeld) { spaceHeld = true; updateStageClasses(); draw(); }
   }
 }
 
-export function initEditor(): void {
-  new ResizeObserver(sizeEditor).observe(stage());
-  onSource(() => { fittedDims = ''; viewTouched = false; });
-  onResult(() => { draw(); updateEditUI(); });
-
-  const c = canvas();
-  c.addEventListener('pointerdown', onPointerDown);
-  c.addEventListener('pointermove', onPointerMove);
-  c.addEventListener('pointerup', endGesture);
-  c.addEventListener('pointercancel', endGesture);
-  c.addEventListener('pointerleave', () => { hover = null; draw(); });
-  c.addEventListener('wheel', (e) => {
+/** Connects the engine to the result canvas. Returns the cleanup. */
+export function attachEditor(stage: HTMLElement, cv: HTMLCanvasElement): () => void {
+  stageEl = stage;
+  canvasEl = cv;
+  view.cw = 0;
+  fittedDims = '';
+  updateStageClasses();
+  const ro = new ResizeObserver(sizeEditor);
+  ro.observe(stage);
+  const leave = () => { hover = null; draw(); };
+  const wheel = (e: WheelEvent) => {
     if (!app.result) return;
     e.preventDefault();
-    const r = c.getBoundingClientRect();
+    const r = cv.getBoundingClientRect();
     zoomStep(e.deltaY < 0 ? 1 : -1, [e.clientX - r.left, e.clientY - r.top]);
-  }, { passive: false });
+  };
+  cv.addEventListener('pointerdown', onPointerDown);
+  cv.addEventListener('pointermove', onPointerMove);
+  cv.addEventListener('pointerup', endGesture);
+  cv.addEventListener('pointercancel', endGesture);
+  cv.addEventListener('pointerleave', leave);
+  cv.addEventListener('wheel', wheel, { passive: false });
+  const scheme = matchMedia('(prefers-color-scheme: dark)');
+  scheme.addEventListener('change', draw);
+  return () => {
+    ro.disconnect();
+    scheme.removeEventListener('change', draw);
+    cv.removeEventListener('pointerdown', onPointerDown);
+    cv.removeEventListener('pointermove', onPointerMove);
+    cv.removeEventListener('pointerup', endGesture);
+    cv.removeEventListener('pointercancel', endGesture);
+    cv.removeEventListener('pointerleave', leave);
+    cv.removeEventListener('wheel', wheel);
+    if (canvasEl === cv) { stageEl = null; canvasEl = null; }
+  };
+}
 
-  document.querySelectorAll<HTMLElement>('.tool').forEach((b) => b.addEventListener('click', () => {
-    const t = b.dataset.tool as Tool;
-    // the background picker is a lone toggle in its step
-    setTool(t === 'bg' && tool === 'bg' ? 'pan' : t);
-  }));
-  field('drawColor').addEventListener('input', () => {
-    setDrawColor(hexToRgb(field('drawColor').value));
-    if (tool === 'pan' || tool === 'picker' || tool === 'bg') setTool('pencil');
+export function initEditor(): void {
+  pxBus.on('source', () => { fittedDims = ''; viewTouched = false; });
+  pxBus.on('result', draw);
+  pxBus.on('settings', draw);
+  pxBus.on('step', () => {
+    // drawing tools belong to "Touch up" and the background picker to its step
+    const s = currentStep();
+    const allowed = ed.tool === 'pan' || (s === 'edit' && ed.tool !== 'bg') || (s === 'clean' && ed.tool === 'bg');
+    if (!allowed) setTool('pan');
+    draw();
   });
-  $('zoomInBtn').addEventListener('click', () => zoomStep(1, null));
-  $('zoomOutBtn').addEventListener('click', () => zoomStep(-1, null));
-  $('fitBtn').addEventListener('click', () => { fittedDims = ''; draw(); });
-  field('pixGrid').addEventListener('change', draw);
-  field('compare').addEventListener('change', () => { field('split').disabled = !isChecked('compare'); draw(); });
-  field('split').addEventListener('input', draw);
-  $('undoBtn').addEventListener('click', undo);
-  $('redoBtn').addEventListener('click', redo);
-  $('clearEdits').addEventListener('click', () => { if (!app.edits.size) return; pushUndo(); app.edits = new Map(); commitEdits(); });
-
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('keyup', (e) => {
-    if (e.key === ' ' && spaceHeld && currentMode() === 'pixelize') { spaceHeld = false; stage().classList.toggle('pan', tool === 'pan'); draw(); }
+    if (e.key === ' ' && spaceHeld && currentMode() === 'pixelize') { spaceHeld = false; updateStageClasses(); draw(); }
   });
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
-
-  // drawing tools belong to "Touch up" and the background picker to its step
-  onStep((s) => {
-    const allowed = tool === 'pan' || (s === 'edit' && tool !== 'bg') || (s === 'clean' && tool === 'bg');
-    if (!allowed) setTool('pan');
-  });
-
-  setTool('pan');
-  setDrawColor(drawColor);
 }

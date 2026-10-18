@@ -3,7 +3,7 @@
 import { fakePixelArt, lanternSheet } from '../core/fake';
 import type { SourceImage } from '../core/grid';
 import { setSource } from './app';
-import { $, field, setStatus } from './dom';
+import { setStatus } from './dom';
 
 export function imageToData(drawable: CanvasImageSource & { width: number; height: number }): SourceImage & { img: HTMLCanvasElement } {
   const w = (drawable as HTMLImageElement).naturalWidth || drawable.width;
@@ -27,15 +27,7 @@ export function decodeFile(file: File): Promise<HTMLImageElement> {
 }
 
 function load(drawable: CanvasImageSource & { width: number; height: number }, name: string, isSample: boolean): void {
-  const src = imageToData(drawable);
-  $('srcTag').textContent = isSample ? 'Sample' : '';
-  $('srcName').textContent = isSample
-    ? 'Loaded the sample: a 4-frame lantern spritesheet blown up to about 16 px per pixel, with noise.'
-    : `Loaded: ${name}`;
-  const maxCell = String(Math.max(8, Math.floor(Math.min(src.w, src.h) / 4)));
-  field('cellXr').max = maxCell;
-  field('cellYr').max = maxCell;
-  setSource({ ...src, name, isSample });
+  setSource({ ...imageToData(drawable), name, isSample });
 }
 
 export async function loadFile(file: File | null | undefined): Promise<void> {
@@ -55,20 +47,13 @@ export function sampleCanvas(): HTMLCanvasElement {
 
 export const loadSample = () => load(sampleCanvas(), 'lantern', true);
 
+/** Dropping or pasting an image anywhere loads it (the sprite editor catches these first while it is open). */
 export function initInput(): void {
-  const drop = $('drop'), file = field('file');
-  drop.addEventListener('click', () => file.click());
-  $('sampleBtn').addEventListener('click', loadSample);
-  drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.click(); } });
-  file.addEventListener('change', () => { loadFile(file.files?.[0]); file.value = ''; });
-  for (const t of ['dragenter', 'dragover']) drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); });
-  for (const t of ['dragleave', 'drop']) drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); });
-  drop.addEventListener('drop', (e) => loadFile((e as DragEvent).dataTransfer?.files[0]));
   document.addEventListener('dragover', (e) => e.preventDefault());
   document.addEventListener('drop', (e) => {
     e.preventDefault();
     const f = e.dataTransfer?.files[0];
-    if (e.target !== drop && f) loadFile(f);
+    if (f) loadFile(f);
   });
   document.addEventListener('paste', (e) => {
     if ((e.target as HTMLElement).matches?.('input[type="text"]')) return;

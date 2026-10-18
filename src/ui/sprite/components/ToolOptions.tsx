@@ -6,7 +6,7 @@ import { deleteSelection, setBrush, setOption, transform } from '../actions';
 import { selectAll, selectionBox } from '../canvas';
 import { copy, cut } from '../io';
 import { useSp } from '../hooks';
-import { Seg } from './common';
+import { Seg } from '../../components/common';
 
 const HINTS: Partial<Record<typeof sp.tool, string>> = {
   rect: 'Shift: square or circle. Right click: secondary color.',

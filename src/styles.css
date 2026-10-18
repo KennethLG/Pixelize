@@ -314,7 +314,7 @@ body[data-mode="sprite"] .wrap { max-width: 1800px; }
 .sp-options { display: flex; flex-wrap: nowrap; align-items: center; gap: 14px; padding: 6px 10px; height: 44px; overflow-x: auto; overflow-y: hidden; }
 .sp-options > * { flex: none; }
 .sp-options .hint { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sp-options:has(#spSelActions:not([hidden])) .hint { display: none; }
+
 .sp-options .group { flex-wrap: nowrap; }
 .sp-options input[type="range"] { width: 110px; flex: none; }
 .sp-sel { padding-left: 12px; border-left: 1px solid var(--line); }
@@ -342,9 +342,9 @@ body[data-mode="sprite"] .wrap { max-width: 1800px; }
 .sp-slot#spSecondary { width: 24px; height: 24px; }
 .sp-slot.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .sp-slots input[type="text"] { width: 0; flex: 1; font-size: 13px; padding: 4px 6px; }
-#spSV, #spHue { width: 100%; display: block; border-radius: 5px; touch-action: none; cursor: crosshair; }
-#spSV { aspect-ratio: 240 / 110; }
-#spHue { height: 12px; }
+#spSV, #spHue, .hsv-sv, .hsv-hue { width: 100%; display: block; border-radius: 5px; touch-action: none; cursor: crosshair; }
+.hsv-sv, #spSV { aspect-ratio: 240 / 110; }
+.hsv-hue, #spHue { height: 12px; }
 
 .sp-palettes { display: flex; flex-direction: column; gap: 5px; }
 .sp-palettes .pal-head { margin-bottom: 2px; }
@@ -421,3 +421,8 @@ body[data-mode="sprite"] .wrap { max-width: 1800px; }
 .sp-bar, .sp-options { scrollbar-width: none; }
 .sp-bar::-webkit-scrollbar, .sp-options::-webkit-scrollbar { display: none; }
 .sp-options .seg label, .sp-options .check { white-space: nowrap; }
+
+/* Touch up: the in-app color picker */
+.colorpick-panel { display: flex; flex-direction: column; gap: 6px; }
+.colorpick-panel .row code { margin-left: auto; }
+.frame-pic { display: contents; }

@@ -30,6 +30,19 @@ export const labOf = (c: RGB): Lab => rgbToLab(c[0], c[1], c[2]);
 export const hex = (rgb: ArrayLike<number>): string =>
   '#' + [rgb[0], rgb[1], rgb[2]].map((v) => v.toString(16).padStart(2, '0')).join('');
 
+export function rgbToHsv([r, g, b]: RGB): [number, number, number] {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+  let h = 0;
+  if (d) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [((h * 60) + 360) % 360, max ? d / max : 0, max];
+}
+
+export function hsvToRgb(h: number, s: number, v: number): RGB {
+  const f = (n: number) => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+  return [Math.round(f(5) * 255), Math.round(f(3) * 255), Math.round(f(1) * 255)];
+}
+
 export function hexToRgb(h: string): RGB {
   const v = parseInt(h.replace('#', ''), 16);
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255];

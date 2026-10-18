@@ -1,15 +1,24 @@
-// App state and the processing loop. UI modules subscribe to three moments:
-// a new source image, a new processed base (settings changed), and a new
-// result (base plus pixel edits). Edits only trigger the last one.
+// Pixelize state and the processing loop. Modules and components follow it
+// through pxBus events:
+//   source    a new image was loaded
+//   base      a new processed result (settings changed)
+//   result    the result changed (new base, or pixel edits)
+//   settings  a setting changed (settings.ts)
+//   step      the open step changed (steps.ts)
+//   editor    the result editor's tool, color, zoom or history changed
+//   anim      frames, their order, selection or playback changed
+//   palette   palette selection, locks, replacements or the imported palette changed
+//   mode      Pixelize / Sprite editor switched (mode.ts)
 
-import type { RGB, RGBA } from '../core/color';
+import { keyAt, labOfKey, rgbOfKey, type RGB, type RGBA } from '../core/color';
 import type { ColorMap } from '../core/palette';
-import type { BgMode } from '../core/background';
-import type { GridMode } from '../core/grid';
-import type { CropMode } from '../core/crop';
-import type { BgPick, PaletteMode, ProcessOptions, ProcessResult } from '../core/pipeline';
+import type { BgPick, ProcessOptions, ProcessResult } from '../core/pipeline';
+import { createBus } from './bus';
+import { setStatus } from './dom';
 import { dropSource, processAsync, type WorkSource } from './processing';
-import { int, isChecked, num, radio, setStatus } from './dom';
+import { settings } from './settings';
+
+export const pxBus = createBus<'source' | 'base' | 'result' | 'settings' | 'step' | 'editor' | 'anim' | 'palette' | 'mode'>();
 
 export interface Source extends WorkSource {
   img: HTMLCanvasElement;
@@ -46,14 +55,13 @@ export const app = {
   locks: [] as RGB[],
   colorMaps: [] as ColorMap[],
   imported: [] as RGB[],
+  /** The result's colors, dark to light. */
   resultColors: [] as ResultColor[],
 };
 
-type Listener = () => void;
-const listeners = { source: [] as Listener[], base: [] as Listener[], result: [] as Listener[] };
-export const onSource = (fn: Listener) => listeners.source.push(fn);
-export const onBase = (fn: Listener) => listeners.base.push(fn);
-export const onResult = (fn: Listener) => listeners.result.push(fn);
+export const onSource = (fn: () => void) => pxBus.on('source', fn);
+export const onBase = (fn: () => void) => pxBus.on('base', fn);
+export const onResult = (fn: () => void) => pxBus.on('result', fn);
 
 let srcSeq = 0;
 export const nextSourceId = () => ++srcSeq;
@@ -68,30 +76,31 @@ export function setSource(s: Omit<Source, 'id'>): void {
   app.colorMaps = [];
   app.edits = new Map();
   app.editDims = '';
-  listeners.source.forEach((f) => f());
+  clearHistory();
+  pxBus.emit('source', 'palette');
   schedule(0);
 }
 
 export function collectOpts(): ProcessOptions {
-  const square = isChecked('square');
+  const s = settings;
   return {
     size: {
-      mode: radio<GridMode>('sizeMode'),
-      cellX: num('cellX'),
-      cellY: square ? num('cellX') : num('cellY'),
-      offX: num('offX') || 0,
-      offY: num('offY') || 0,
-      snap: isChecked('snap'),
-      fw: int('fw'),
-      fh: int('fh'),
+      mode: s.sizeMode,
+      cellX: s.cellX,
+      cellY: s.square ? s.cellX : s.cellY,
+      offX: s.offX || 0,
+      offY: s.offY || 0,
+      snap: s.snap,
+      fw: Math.round(s.fw),
+      fh: Math.round(s.fh),
     },
-    alpha: int('alpha'),
-    palette: { mode: radio<PaletteMode>('palMode'), tol: num('tol'), count: int('colors'), imported: app.imported, locks: app.locks, maps: app.colorMaps },
-    clean: { on: isChecked('clean'), strength: num('cleanStr') },
-    bg: { on: isChecked('removeBg'), mode: radio<BgMode>('bgMode'), tol: num('bgTol'), pick: app.bgPick },
+    alpha: Math.round(s.alpha),
+    palette: { mode: s.palMode, tol: s.tol, count: Math.round(s.colors), imported: app.imported, locks: app.locks, maps: app.colorMaps },
+    clean: { on: s.clean, strength: s.cleanStr },
+    bg: { on: s.removeBg, mode: s.bgMode, tol: s.bgTol, pick: app.bgPick },
     crop: {
-      mode: radio<CropMode>('cropMode'), pad: int('cropPad') || 0,
-      left: int('cropL') || 0, top: int('cropT') || 0, right: int('cropR') || 0, bottom: int('cropB') || 0,
+      mode: s.cropMode, pad: Math.round(s.cropPad) || 0,
+      left: Math.round(s.cropL) || 0, top: Math.round(s.cropT) || 0, right: Math.round(s.cropR) || 0, bottom: Math.round(s.cropB) || 0,
     },
   };
 }
@@ -102,6 +111,7 @@ let timer = 0;
 /** Reprocess the source with the current settings (debounced). */
 export function schedule(delay = 80): void {
   clearTimeout(timer);
+  if (!app.source) return;
   setStatus('Processing…');
   timer = window.setTimeout(run, delay);
 }
@@ -129,11 +139,10 @@ function setBase(out: ProcessResult): void {
   }
   app.editDims = dims;
   composeResult();
-  listeners.base.forEach((f) => f());
-  listeners.result.forEach((f) => f());
+  pxBus.emit('base', 'result');
 }
 
-/** Base pixels with the edits applied, also drawn into resultCanvas. */
+/** Base pixels with the edits applied, also drawn into resultCanvas; and the colors it uses. */
 export function composeResult(): void {
   const base = app.base!;
   const px = new Uint8ClampedArray(base.pixels);
@@ -142,11 +151,16 @@ export function composeResult(): void {
   app.resultCanvas.width = base.width;
   app.resultCanvas.height = base.height;
   app.resultCanvas.getContext('2d')!.putImageData(new ImageData(px, base.width, base.height), 0, 0);
+  const counts = new Map<number, number>();
+  for (let i = 0; i < px.length; i += 4) if (px[i + 3]) { const k = keyAt(px, i); counts.set(k, (counts.get(k) || 0) + 1); }
+  app.resultColors = [...counts.entries()]
+    .map(([key, count]) => ({ key, rgb: rgbOfKey(key), count, l: labOfKey(key)[0] }))
+    .sort((a, b) => a.l - b.l);
 }
 
 export function commitEdits(): void {
   composeResult();
-  listeners.result.forEach((f) => f());
+  pxBus.emit('result', 'editor');
 }
 
 // ---------- undo history of pixel edits ----------
@@ -177,4 +191,3 @@ export function clearHistory(): void {
 }
 export const canUndo = () => undoStack.length > 0;
 export const canRedo = () => redoStack.length > 0;
-onSource(clearHistory);

@@ -10,7 +10,7 @@ import { pickSlot } from '../actions';
 import { useSp } from '../hooks';
 import { addToPalette, clearPalette, removeFromPalette, userPalette } from '../prefs';
 import { setColor, sp, versions } from '../state';
-import { Swatch } from './common';
+import { Swatch } from '../../components/common';
 
 async function readPaletteFile(file: File): Promise<RGB[]> {
   if (!file.type.startsWith('image/')) return parsePaletteText(await file.text());

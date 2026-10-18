@@ -5,7 +5,7 @@ import { useRef, useState } from 'react';
 import { addLayer, duplicateLayer, mergeDown, moveLayer, removeLayer } from '../../../core/sprite';
 import { useSp } from '../hooks';
 import { emit, pushDoc, setLayer, sp } from '../state';
-import { useReorder } from './useReorder';
+import { useReorder } from '../../components/useReorder';
 
 function moveTo(from: number, to: number): void {
   if (to < 0 || to >= sp.doc.layers.length || from === to) return;

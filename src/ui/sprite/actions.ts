@@ -1,7 +1,7 @@
 // Editor actions shared by the components and the keyboard shortcuts.
 
 import { flip, scaleNearest } from '../../core/bitmap';
-import type { RGB, RGBA } from '../../core/color';
+import type { RGBA } from '../../core/color';
 import { cel, emit, lift, pushCel, setColor, sp } from './state';
 
 export function setBrush(n: number): void {
@@ -78,17 +78,4 @@ export function setPaperMode(mode: typeof sp.paperMode): void {
   sp.paperMode = mode;
   if (mode === 'checker' && sp.pickSlot === 'paper') sp.pickSlot = 'primary';
   emit('paper', 'color');
-}
-
-export function rgbToHsv([r, g, b]: RGB): [number, number, number] {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
-  let h = 0;
-  if (d) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-  return [((h * 60) + 360) % 360, max ? d / max : 0, max];
-}
-
-export function hsvToRgb(h: number, s: number, v: number): RGB {
-  const f = (n: number) => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
-  return [Math.round(f(5) * 255), Math.round(f(3) * 255), Math.round(f(1) * 255)];
 }

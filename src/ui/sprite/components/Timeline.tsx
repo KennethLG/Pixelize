@@ -5,8 +5,8 @@ import { memo, useEffect, useLayoutEffect, useRef } from 'react';
 import { DEFAULT_DURATION, addFrame, composite, duplicateFrame, moveFrame, removeFrame } from '../../../core/sprite';
 import { useSp } from '../hooks';
 import { emit, pushDoc, setFrame, sp, versions } from '../state';
-import { NumberField } from './common';
-import { useReorder } from './useReorder';
+import { NumberField } from '../../components/common';
+import { useReorder } from '../../components/useReorder';
 
 function paint(c: HTMLCanvasElement, fi: number): void {
   const { w, h } = sp.doc;

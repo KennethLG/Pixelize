@@ -1,16 +1,18 @@
 // The spritesheet workbench: splitting the result into frames, ordering and
-// aligning them, playback, and the animation exports.
+// aligning them, playback, and the animation exports. The components read the
+// state through the getters below and re-render on the 'anim' event; the
+// preview and align canvases are drawn here, attached by their components.
 
 import { hex, rgbOfKey } from '../core/color';
-import { findFrames, gridFrames, nextIndex, playbackSequence, type Direction, type Rect } from '../core/frames';
+import { findFrames, gridFrames, nextIndex, playbackSequence, type Rect } from '../core/frames';
 import { encodeGif } from '../export/gif';
 import { makeZip, type ZipEntry } from '../export/zip';
-import { app, onResult } from './app';
-import { $, cssVar, field, int, isChecked, onAll, radio, reducedMotion, setStatus, wait } from './dom';
-import { syncSplit } from './controls';
+import { app, pxBus } from './app';
+import { cssVar, reducedMotion, setStatus, wait } from './dom';
 import { baseName, canvasBlob, canvasBytes, saveBlob } from './downloads';
 import { currentMode } from './mode';
-import { currentStep, onStep } from './steps';
+import { settings } from './settings';
+import { currentStep } from './steps';
 
 interface Anim {
   frames: Rect[];
@@ -34,15 +36,26 @@ let ended = false;                              // "play once" reached the end
 const activeFrames = () => (anim ? order.filter((i) => !excluded.has(i)) : []);
 const holdOf = (i: number) => holds.get(i) || 1;
 const offsetOf = (i: number) => offsets.get(i) || { dx: 0, dy: 0 };
-const playDir = () => radio<Direction>('dir');
-const playOnce = () => radio('endMode') === 'once';
+const playOnce = () => settings.endMode === 'once';
+
+// ---------- read-only state for the components ----------
+
+export const animInfo = () => ({
+  anim, order, excluded, selected, playing, ended,
+  active: activeFrames(),
+  holdOf, offsetOf,
+  /** the frame on screen in the preview */
+  current: currentFrame(),
+});
+
+// ---------- building the frames ----------
 
 function buildAnim(): Anim {
-  const res = app.result!, base = app.base!;
-  const mode = radio('splitMode');
+  const res = app.result!, base = app.base!, s = settings;
+  const mode = s.splitMode;
   const frames = mode === 'grid'
-    ? gridFrames(res.width, res.height, Math.max(1, Math.min(res.width, int('cols') || 1)), Math.max(1, Math.min(res.height, int('rows') || 1)))
-    : findFrames(res.pixels, res.width, res.height, new Set(base.bgKeys), Math.max(1, int('minGap') || 1));
+    ? gridFrames(res.width, res.height, Math.max(1, Math.min(res.width, Math.round(s.cols) || 1)), Math.max(1, Math.min(res.height, Math.round(s.rows) || 1)))
+    : findFrames(res.pixels, res.width, res.height, new Set(base.bgKeys), Math.max(1, Math.round(s.minGap) || 1));
   const key = `${mode}:${frames.length}`;
   if (key !== framesKey) {
     framesKey = key;
@@ -57,7 +70,7 @@ function buildAnim(): Anim {
   }
   const auto = mode !== 'grid';
   const fw = Math.max(0, ...frames.map((f) => f.w)), fh = Math.max(0, ...frames.map((f) => f.h));
-  const bottom = radio('align') === 'bottom';
+  const bottom = s.align === 'bottom';
   // where each frame lands: centered (feet or middles lined up), then moved by its offset
   const place = frames.map((f, n) => ({
     x: (auto ? Math.floor((fw - f.w) / 2) : 0) + offsetOf(n).dx,
@@ -72,7 +85,7 @@ function buildAnim(): Anim {
     H = Math.max(...place.map((p, n) => p.y + frames[n].h)) - y0;
   }
   // keep the background color as padding when it was not removed
-  const pad = !isChecked('removeBg') && base.bgKey !== null ? hex(rgbOfKey(base.bgKey)) : null;
+  const pad = !s.removeBg && base.bgKey !== null ? hex(rgbOfKey(base.bgKey)) : null;
   const canvases = frames.map((f, n) => {
     const part = new ImageData(f.w, f.h);
     for (let y = 0; y < f.h; y++) {
@@ -94,81 +107,21 @@ function buildAnim(): Anim {
   return { frames, W, H, canvases };
 }
 
-// ---------- rendering ----------
-
-function frameCard(i: number, pos: number): HTMLElement {
-  const out = excluded.has(i);
-  const card = document.createElement('div');
-  card.className = 'frame' + (out ? ' off' : '') + (selected === i ? ' sel' : '');
-  card.tabIndex = 0;
-  card.setAttribute('role', 'button');
-  card.setAttribute('aria-label', `Frame ${pos + 1}${out ? ', excluded from the animation' : ''}`);
-  card.dataset.frame = String(i);
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'ftoggle';
-  toggle.textContent = out ? '+' : '×';
-  toggle.title = out ? 'Add back to the animation' : 'Take out of the animation';
-  toggle.setAttribute('aria-label', toggle.title);
-  toggle.addEventListener('click', (e) => { e.stopPropagation(); toggleExcluded(i); });
-  const label = document.createElement('span');
-  label.textContent = String(pos + 1);
-  if (holdOf(i) > 1) { const h = document.createElement('em'); h.textContent = ` ${holdOf(i)}×`; label.append(h); }
-  const o = offsetOf(i);
-  if (o.dx || o.dy) { const m = document.createElement('em'); m.textContent = ' •'; m.title = 'Moved'; label.append(m); }
-  card.append(toggle, anim!.canvases[i], label);
-  card.addEventListener('keydown', (e) => {
-    if (e.target !== card) return;
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectFrame(i); }
-    else if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); moveFrame(i, -1); }
-    else if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); moveFrame(i, 1); }
-  });
-  return card;
-}
-
+/** Rebuilds the frames from the result and the settings, and redraws. */
 export function renderAnim(): void {
-  const on = isChecked('animOn');
-  $('animBody').hidden = !on;
-  $('animOff').hidden = on;
-  $('animOpts').hidden = !on;
-  $('animOffHint').hidden = on;
-  if (!on || !app.result || !app.base) {
-    anim = null;
-    $('animInfo').textContent = '';
-    $('animExport').hidden = true;
-    return;
+  if (!settings.animOn || !app.result || !app.base) anim = null;
+  else {
+    anim = buildAnim();
+    if (selected === null || !order.includes(selected)) selected = order[0] ?? null;
   }
-  // keep keyboard focus on the same frame across re-renders
-  const focusFrame = (document.activeElement as HTMLElement | null)?.closest?.<HTMLElement>('.frame')?.dataset.frame ?? null;
-  anim = buildAnim();
-  const n = anim.frames.length;
-  if (selected === null || !order.includes(selected)) selected = order[0] ?? null;
-  $('animExport').hidden = !n;
-  $('animInfo').textContent = n ? `${activeFrames().length} of ${n} frames · ${anim.W}×${anim.H} px` : 'No frames found';
-  const cv = $<HTMLCanvasElement>('animCanvas');
-  cv.width = Math.max(1, anim.W);
-  cv.height = Math.max(1, anim.H);
-  $('frames').replaceChildren(...order.map((i, pos) => frameCard(i, pos)));
-  if (focusFrame !== null) $('frames').querySelector<HTMLElement>(`.frame[data-frame="${focusFrame}"]`)?.focus();
-  updateSelectionUI();
-  drawAnimFrame();
+  pxBus.emit('anim');
+  drawPreview();
   drawAlign();
 }
 
-function updateSelectionUI(): void {
-  const pos = selected === null ? -1 : order.indexOf(selected);
-  const has = pos >= 0;
-  field('moveL').disabled = pos <= 0;
-  field('moveR').disabled = !has || pos >= order.length - 1;
-  field('selToggle').disabled = !has;
-  $('selToggle').textContent = has && excluded.has(selected!) ? 'Include' : 'Exclude';
-  for (const id of ['holdMinus', 'holdPlus', 'nudgeL', 'nudgeU', 'nudgeD', 'nudgeR', 'nudgeReset']) field(id).disabled = !has;
-  field('resetAllOffsets').disabled = !offsets.size;
-  $('holdVal').textContent = has ? `${holdOf(selected!)}×` : '–';
-  const o = has ? offsetOf(selected!) : null;
-  $('nudgeVal').textContent = o ? `${o.dx > 0 ? '+' : ''}${o.dx}, ${o.dy > 0 ? '+' : ''}${o.dy}` : '–';
-  $('alignTag').textContent = has ? `Frame ${pos + 1} of ${order.length}` : '';
-}
+// ---------- preview ----------
+
+let previewCanvas: HTMLCanvasElement | null = null;
 
 function currentFrame(): number | null {
   const act = activeFrames();
@@ -176,13 +129,16 @@ function currentFrame(): number | null {
   return act.length ? act[animIndex % act.length] : null;
 }
 
-function drawAnimFrame(): void {
-  const cv = $<HTMLCanvasElement>('animCanvas'), ctx = cv.getContext('2d')!;
+function drawPreview(): void {
+  const cv = previewCanvas;
+  if (!cv) return;
+  const W = Math.max(1, anim?.W || 1), H = Math.max(1, anim?.H || 1);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const ctx = cv.getContext('2d')!;
   ctx.clearRect(0, 0, cv.width, cv.height);
   const idx = currentFrame();
-  for (const el of $('frames').children) (el as HTMLElement).classList.toggle('on', idx !== null && (el as HTMLElement).dataset.frame === String(idx));
-  if (!anim || idx === null) { $('frameInfo').textContent = anim?.frames.length ? 'All frames are excluded' : ''; return; }
-  if (isChecked('onion')) {
+  if (!anim || idx === null) return;
+  if (settings.onion) {
     const act = activeFrames(), p = act.indexOf(idx);
     if (act.length > 1 && p >= 0) {
       const prev = act[(p - 1 + act.length) % act.length], next = act[(p + 1) % act.length];
@@ -193,17 +149,55 @@ function drawAnimFrame(): void {
     }
   }
   ctx.drawImage(anim.canvases[idx], 0, 0);
-  $('frameInfo').textContent = `Frame ${order.indexOf(idx) + 1} of ${order.length}` + (excluded.has(idx) ? ' · excluded' : '');
+}
+
+export function attachPreview(cv: HTMLCanvasElement): () => void {
+  previewCanvas = cv;
+  drawPreview();
+  return () => { if (previewCanvas === cv) previewCanvas = null; };
+}
+
+function startIndex(): number {
+  pingDir = 1;
+  return settings.dir === 'reverse' ? Math.max(0, activeFrames().length - 1) : 0;
+}
+
+export function setPlaying(value: boolean): void {
+  playing = value;
+  if (playing && ended) { animIndex = startIndex(); ended = false; animLast = 0; }
+  else if (playing && selected !== null) {
+    // resume from the frame being looked at
+    const act = activeFrames();
+    if (act.includes(selected)) animIndex = act.indexOf(selected);
+  }
+  pxBus.emit('anim');
+  drawPreview();
+}
+
+function tick(t: number): void {
+  const fps = settings.fps || 8;
+  const cur = currentFrame();
+  if (anim && playing && t - animLast >= (1000 / fps) * (cur === null ? 1 : holdOf(cur))) {
+    animLast = t;
+    const n = activeFrames().length;
+    const r = nextIndex(animIndex % Math.max(1, n), n, settings.dir, playOnce(), pingDir);
+    pingDir = r.pingDir;
+    if (r.next === null) { ended = true; setPlaying(false); }
+    else { animIndex = r.next; pxBus.emit('anim'); }
+    drawPreview();
+  }
+  requestAnimationFrame(tick);
 }
 
 // ---------- align view ----------
 
 // The selected frame blown up, over a faint reference frame, with center lines.
+let alignCanvas: HTMLCanvasElement | null = null;
 let alignView = { z: 1, ox: 0, oy: 0, dpr: 1 };
 
 function ghostFrame(): number | null {
   if (selected === null) return null;
-  const mode = radio('ghost');
+  const mode = settings.ghost;
   if (mode === 'first') return order[0] !== selected ? order[0] : null;
   if (mode === 'prev') {
     const p = order.indexOf(selected);
@@ -212,8 +206,9 @@ function ghostFrame(): number | null {
   return null;
 }
 
-function drawAlign(): void {
-  const cv = $<HTMLCanvasElement>('alignCanvas');
+export function drawAlign(): void {
+  const cv = alignCanvas;
+  if (!cv) return;
   const r = cv.getBoundingClientRect();
   if (!r.width || !r.height) return;
   const dpr = window.devicePixelRatio || 1;
@@ -258,43 +253,56 @@ function drawAlign(): void {
   ctx.setLineDash([]);
 }
 
-let alignDrag: { x: number; y: number; start: { dx: number; dy: number }; pointerId: number } | null = null;
-
-function initAlignView(): void {
-  const cv = $<HTMLCanvasElement>('alignCanvas');
-  new ResizeObserver(drawAlign).observe($('alignStage'));
-  cv.addEventListener('pointerdown', (e) => {
+/** Connects the align canvas: dragging moves the selected frame. Returns the cleanup. */
+export function attachAlign(stage: HTMLElement, cv: HTMLCanvasElement): () => void {
+  alignCanvas = cv;
+  let drag: { x: number; y: number; start: { dx: number; dy: number }; pointerId: number } | null = null;
+  const ro = new ResizeObserver(drawAlign);
+  ro.observe(stage);
+  const down = (e: PointerEvent) => {
     if (selected === null || e.button !== 0) return;
     cv.setPointerCapture(e.pointerId);
     cv.focus();
-    alignDrag = { x: e.clientX, y: e.clientY, start: offsetOf(selected), pointerId: e.pointerId };
-    $('alignStage').classList.add('dragging');
-  });
-  cv.addEventListener('pointermove', (e) => {
-    if (!alignDrag || e.pointerId !== alignDrag.pointerId || selected === null) return;
+    drag = { x: e.clientX, y: e.clientY, start: offsetOf(selected), pointerId: e.pointerId };
+    stage.classList.add('dragging');
+  };
+  const move = (e: PointerEvent) => {
+    if (!drag || e.pointerId !== drag.pointerId || selected === null) return;
     const step = alignView.z / alignView.dpr; // screen px per art pixel
-    const dx = alignDrag.start.dx + Math.round((e.clientX - alignDrag.x) / step);
-    const dy = alignDrag.start.dy + Math.round((e.clientY - alignDrag.y) / step);
+    const dx = drag.start.dx + Math.round((e.clientX - drag.x) / step);
+    const dy = drag.start.dy + Math.round((e.clientY - drag.y) / step);
     const o = offsetOf(selected);
     if (dx !== o.dx || dy !== o.dy) setOffset(selected, dx, dy);
-  });
-  const end = (e: PointerEvent) => {
-    if (!alignDrag || e.pointerId !== alignDrag.pointerId) return;
-    alignDrag = null;
-    $('alignStage').classList.remove('dragging');
   };
+  const end = (e: PointerEvent) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    drag = null;
+    stage.classList.remove('dragging');
+  };
+  cv.addEventListener('pointerdown', down);
+  cv.addEventListener('pointermove', move);
   cv.addEventListener('pointerup', end);
   cv.addEventListener('pointercancel', end);
-  onAll('input[name="ghost"]', 'change', drawAlign);
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawAlign);
+  const scheme = matchMedia('(prefers-color-scheme: dark)');
+  scheme.addEventListener('change', drawAlign);
+  drawAlign();
+  return () => {
+    ro.disconnect();
+    scheme.removeEventListener('change', drawAlign);
+    cv.removeEventListener('pointerdown', down);
+    cv.removeEventListener('pointermove', move);
+    cv.removeEventListener('pointerup', end);
+    cv.removeEventListener('pointercancel', end);
+    if (alignCanvas === cv) alignCanvas = null;
+  };
 }
 
 // ---------- editing frames ----------
 
-function selectFrame(i: number): void { selected = i; renderAnim(); }
-function toggleExcluded(i: number): void { if (excluded.has(i)) excluded.delete(i); else excluded.add(i); renderAnim(); }
+export function selectFrame(i: number): void { selected = i; renderAnim(); }
+export function toggleExcluded(i: number): void { if (excluded.has(i)) excluded.delete(i); else excluded.add(i); renderAnim(); }
 
-function moveFrame(i: number, dir: number): void {
+export function moveFrame(i: number, dir: number): void {
   const from = order.indexOf(i), to = from + dir;
   if (from < 0 || to < 0 || to >= order.length) return;
   order.splice(from, 1);
@@ -302,25 +310,26 @@ function moveFrame(i: number, dir: number): void {
   renderAnim();
 }
 
-// Moves frame i so it lands before the card currently at position `target`.
-function reorder(i: number, target: number): void {
+/** Moves frame i to position `to` in the playback order. */
+export function reorder(i: number, to: number): void {
   const from = order.indexOf(i);
+  if (from < 0 || from === to) return;
   order.splice(from, 1);
-  if (target > from) target--;
-  order.splice(target, 0, i);
+  order.splice(to, 0, i);
   renderAnim();
 }
 
-function setOffset(i: number, dx: number, dy: number): void {
+export function setOffset(i: number, dx: number, dy: number): void {
   if (dx || dy) offsets.set(i, { dx, dy });
   else offsets.delete(i);
   selected = i;
   renderAnim();
 }
 
-const nudge = (i: number, dx: number, dy: number) => { const o = offsetOf(i); setOffset(i, o.dx + dx, o.dy + dy); };
+export const nudge = (i: number, dx: number, dy: number) => { const o = offsetOf(i); setOffset(i, o.dx + dx, o.dy + dy); };
+export function resetAllOffsets(): void { offsets = new Map(); renderAnim(); }
 
-function setHold(i: number, v: number): void {
+export function setHold(i: number, v: number): void {
   holds.set(i, Math.max(1, Math.min(16, v)));
   renderAnim();
 }
@@ -332,105 +341,9 @@ const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRigh
 function onKeyDown(e: KeyboardEvent): void {
   const d = ARROWS[e.key];
   if (!d || currentMode() !== 'pixelize' || currentStep() !== 'frames' || selected === null || e.altKey || e.ctrlKey || e.metaKey) return;
-  if ((e.target as HTMLElement).matches?.('input, select, textarea')) return;
+  if ((e.target as HTMLElement).matches?.('input, select, textarea, .frame')) return;
   e.preventDefault();
   nudge(selected, d[0], d[1]);
-}
-
-// ---------- playback ----------
-
-function updatePlayLabel(): void {
-  $('playBtn').textContent = playing ? 'Pause' : ended ? 'Replay' : 'Play';
-}
-
-function startIndex(): number {
-  pingDir = 1;
-  return playDir() === 'reverse' ? Math.max(0, activeFrames().length - 1) : 0;
-}
-
-function setPlaying(value: boolean): void {
-  playing = value;
-  if (playing && ended) { animIndex = startIndex(); ended = false; animLast = 0; }
-  else if (playing && selected !== null) {
-    // resume from the frame being looked at
-    const act = activeFrames();
-    if (act.includes(selected)) animIndex = act.indexOf(selected);
-  }
-  updatePlayLabel();
-  drawAnimFrame();
-}
-
-function tick(t: number): void {
-  const fps = int('fps') || 8;
-  const cur = currentFrame();
-  if (anim && playing && t - animLast >= (1000 / fps) * (cur === null ? 1 : holdOf(cur))) {
-    animLast = t;
-    const n = activeFrames().length;
-    const r = nextIndex(animIndex % Math.max(1, n), n, playDir(), playOnce(), pingDir);
-    pingDir = r.pingDir;
-    if (r.next === null) { ended = true; setPlaying(false); }
-    else animIndex = r.next;
-    drawAnimFrame();
-  }
-  requestAnimationFrame(tick);
-}
-
-// ---------- drag to reorder ----------
-
-// Pointer events, so it also works on touch screens. A press that does not
-// move is a click and selects the frame.
-let drag: { card: HTMLElement; frame: number; x: number; pointerId: number; active: boolean; target: number | null } | null = null;
-
-function dropTarget(x: number): number {
-  for (const c of [...$('frames').children] as HTMLElement[]) {
-    if (c === drag!.card) continue;
-    const r = c.getBoundingClientRect();
-    if (x < r.left + r.width / 2) return order.indexOf(Number(c.dataset.frame));
-  }
-  return order.length;
-}
-
-function clearDropMarks(): void {
-  for (const c of $('frames').children) c.classList.remove('drop-before', 'drop-after', 'dragging');
-}
-
-function initDrag(): void {
-  const strip = $('frames');
-  strip.addEventListener('pointerdown', (e) => {
-    const card = (e.target as HTMLElement).closest<HTMLElement>('.frame');
-    if (!card || (e.target as HTMLElement).closest('.ftoggle') || e.button !== 0) return;
-    drag = { card, frame: Number(card.dataset.frame), x: e.clientX, pointerId: e.pointerId, active: false, target: null };
-  });
-  strip.addEventListener('pointermove', (e) => {
-    if (!drag || e.pointerId !== drag.pointerId) return;
-    if (!drag.active) {
-      if (Math.abs(e.clientX - drag.x) < 6) return;
-      drag.active = true;
-      strip.setPointerCapture(e.pointerId);
-    }
-    e.preventDefault();
-    clearDropMarks();
-    drag.card.classList.add('dragging');
-    drag.target = dropTarget(e.clientX);
-    const at = strip.querySelector(`.frame[data-frame="${order[drag.target]}"]`);
-    if (drag.target < order.length && at && at !== drag.card) at.classList.add('drop-before');
-    else if (drag.target >= order.length) strip.lastElementChild?.classList.add('drop-after');
-    // scroll the strip when dragging near its edges
-    const r = strip.getBoundingClientRect();
-    if (e.clientX < r.left + 30) strip.scrollLeft -= 8;
-    else if (e.clientX > r.right - 30) strip.scrollLeft += 8;
-  });
-  const end = (e: PointerEvent, cancelled: boolean) => {
-    if (!drag || e.pointerId !== drag.pointerId) return;
-    const d = drag;
-    drag = null;
-    clearDropMarks();
-    if (cancelled) return;
-    if (d.active) { if (d.target !== null) reorder(d.frame, d.target); }
-    else selectFrame(d.frame);
-  };
-  strip.addEventListener('pointerup', (e) => end(e, false));
-  strip.addEventListener('pointercancel', (e) => end(e, true));
 }
 
 // ---------- exports ----------
@@ -438,7 +351,7 @@ function initDrag(): void {
 // Active frames in order, each repeated by its duration when asked.
 function exportFrames(): number[] {
   const act = activeFrames();
-  return isChecked('repeatHolds') ? act.flatMap((i) => Array<number>(holdOf(i)).fill(i)) : act;
+  return settings.repeatHolds ? act.flatMap((i) => Array<number>(holdOf(i)).fill(i)) : act;
 }
 
 function noFrames(): boolean {
@@ -447,7 +360,7 @@ function noFrames(): boolean {
   return true;
 }
 
-async function downloadStrip(): Promise<void> {
+export async function downloadStrip(): Promise<void> {
   if (noFrames()) return;
   const seq = exportFrames(), a = anim!;
   const c = document.createElement('canvas');
@@ -458,12 +371,12 @@ async function downloadStrip(): Promise<void> {
   await saveBlob(await canvasBlob(c), `${baseName()}_strip${seq.length}.png`);
 }
 
-async function downloadSheet(): Promise<void> {
+export async function downloadSheet(): Promise<void> {
   if (noFrames()) return;
   const seq = exportFrames(), a = anim!;
-  const cols = Math.max(1, Math.min(seq.length, int('sheetCols') || Math.ceil(Math.sqrt(seq.length))));
+  const cols = Math.max(1, Math.min(seq.length, Math.round(settings.sheetCols) || Math.ceil(Math.sqrt(seq.length))));
   const rows = Math.ceil(seq.length / cols);
-  const pad = Math.max(0, int('sheetPad') || 0);
+  const pad = Math.max(0, Math.round(settings.sheetPad) || 0);
   const c = document.createElement('canvas');
   c.width = cols * a.W + (cols + 1) * pad;
   c.height = rows * a.H + (rows + 1) * pad;
@@ -472,7 +385,7 @@ async function downloadSheet(): Promise<void> {
   await saveBlob(await canvasBlob(c), `${baseName()}_sheet_${cols}x${rows}.png`);
 }
 
-async function downloadFramesZip(): Promise<void> {
+export async function downloadFramesZip(): Promise<void> {
   if (noFrames()) return;
   const act = activeFrames();
   const files: ZipEntry[] = [];
@@ -482,12 +395,12 @@ async function downloadFramesZip(): Promise<void> {
   await saveBlob(new Blob([makeZip(files)], { type: 'application/zip' }), `${baseName()}_frames.zip`);
 }
 
-async function downloadGif(): Promise<void> {
+export async function downloadGif(): Promise<void> {
   if (noFrames()) return;
   const a = anim!;
-  const seq = playbackSequence(activeFrames(), playDir(), playOnce());
-  const scale = Math.max(1, Math.min(32, int('gifScale') || 1));
-  const fps = int('fps') || 8;
+  const seq = playbackSequence(activeFrames(), settings.dir, playOnce());
+  const scale = Math.max(1, Math.min(32, Math.round(settings.gifScale) || 1));
+  const fps = settings.fps || 8;
   setStatus('Encoding GIF…');
   await wait(20);
   const frames = seq.map((i) => a.canvases[i].getContext('2d')!.getImageData(0, 0, a.W, a.H).data);
@@ -497,49 +410,35 @@ async function downloadGif(): Promise<void> {
 
 // ---------- wiring ----------
 
+const ANIM_KEYS = ['animOn', 'splitMode', 'cols', 'rows', 'minGap', 'align'] as const;
+const VIEW_KEYS = ['onion', 'ghost'] as const;
+const keyOf = (keys: readonly (keyof typeof settings)[]) => keys.map((k) => settings[k]).join('|');
+
 export function initAnim(): void {
-  onResult(renderAnim);
-  onStep((s) => { if (s === 'frames') drawAlign(); });
-  initDrag();
-  initAlignView();
-  document.addEventListener('keydown', onKeyDown);
-  field('animOn').addEventListener('change', renderAnim);
-  onAll('input[name="splitMode"]', 'change', () => { syncSplit(); renderAnim(); });
-  onAll('input[name="align"]', 'change', renderAnim);
-  for (const id of ['cols', 'rows', 'minGap']) field(id).addEventListener('input', renderAnim);
-  field('fps').addEventListener('input', () => { $('fpsOut').textContent = field('fps').value; });
-  field('onion').addEventListener('change', drawAnimFrame);
-  $('playBtn').addEventListener('click', () => setPlaying(!playing));
-  onAll('input[name="dir"], input[name="endMode"]', 'change', () => {
-    // a finished "once" run can play again after changing the options
-    if (ended) { ended = false; animIndex = startIndex(); updatePlayLabel(); drawAnimFrame(); }
-    if (playDir() !== 'pingpong') pingDir = 1;
+  pxBus.on('result', renderAnim);
+  pxBus.on('step', () => { if (currentStep() === 'frames') requestAnimationFrame(drawAlign); });
+  let animKey = keyOf(ANIM_KEYS), viewKey = keyOf(VIEW_KEYS), playKey = `${settings.dir}|${settings.endMode}`;
+  pxBus.on('settings', () => {
+    const a = keyOf(ANIM_KEYS), v = keyOf(VIEW_KEYS), p = `${settings.dir}|${settings.endMode}`;
+    if (a !== animKey) { animKey = a; renderAnim(); }
+    if (v !== viewKey) { viewKey = v; drawPreview(); drawAlign(); }
+    if (p !== playKey) {
+      playKey = p;
+      // a finished "once" run can play again after changing the options
+      if (ended) { ended = false; animIndex = startIndex(); pxBus.emit('anim'); drawPreview(); }
+      if (settings.dir !== 'pingpong') pingDir = 1;
+    }
   });
-  const withSel = (fn: (i: number) => void) => () => { if (selected !== null) fn(selected); };
-  $('moveL').addEventListener('click', withSel((i) => moveFrame(i, -1)));
-  $('moveR').addEventListener('click', withSel((i) => moveFrame(i, 1)));
-  $('selToggle').addEventListener('click', withSel(toggleExcluded));
-  $('holdMinus').addEventListener('click', withSel((i) => setHold(i, holdOf(i) - 1)));
-  $('holdPlus').addEventListener('click', withSel((i) => setHold(i, holdOf(i) + 1)));
-  for (const [id, key] of [['nudgeL', 'ArrowLeft'], ['nudgeR', 'ArrowRight'], ['nudgeU', 'ArrowUp'], ['nudgeD', 'ArrowDown']]) {
-    $(id).addEventListener('click', withSel((i) => nudge(i, ARROWS[key][0], ARROWS[key][1])));
-  }
-  $('nudgeReset').addEventListener('click', withSel((i) => setOffset(i, 0, 0)));
-  $('resetAllOffsets').addEventListener('click', () => { offsets = new Map(); renderAnim(); });
-  $('dlStrip').addEventListener('click', downloadStrip);
-  $('dlSheet').addEventListener('click', downloadSheet);
-  $('dlZip').addEventListener('click', downloadFramesZip);
-  $('dlGif').addEventListener('click', downloadGif);
-  updatePlayLabel();
+  document.addEventListener('keydown', onKeyDown);
   requestAnimationFrame(tick);
 }
 
-/** Read-only view for checking the page from the console. */
 /** The frames of the animation as they play (aligned, in order), or null when there is no animation. */
 export function animFrameCanvases(): HTMLCanvasElement[] | null {
-  if (!anim || !isChecked('animOn')) return null;
+  if (!anim || !settings.animOn) return null;
   const act = activeFrames();
   return act.length > 1 ? act.map((i) => anim!.canvases[i]) : null;
 }
 
+/** Read-only view for checking the page from the console. */
 export const animState = () => ({ anim, order: [...order], excluded: [...excluded], selected, playing, holds: [...holds], offsets: [...offsets] });

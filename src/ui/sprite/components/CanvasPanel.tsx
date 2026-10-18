@@ -8,7 +8,7 @@ import { attachCanvas, fitView, hoverText, zoomPercent, zoomStep } from '../canv
 import { useSp } from '../hooks';
 import { clampGrid } from '../prefs';
 import { emit, sp } from '../state';
-import { NumberField, Seg } from './common';
+import { NumberField, Seg } from '../../components/common';
 
 function HoverReadout() {
   useSp('hover', 'structure');

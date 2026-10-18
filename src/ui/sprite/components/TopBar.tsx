@@ -5,7 +5,7 @@ import { setStatus } from '../../dom';
 import { useSp } from '../hooks';
 import { MAX_SIDE, exportGif, exportPng, exportStrip, newSprite, openFile, resizeSprite, saveProject } from '../io';
 import { canRedo, canUndo, redo, sp, undo } from '../state';
-import { NumberField } from './common';
+import { NumberField } from '../../components/common';
 
 const report = (p: Promise<unknown>) => { p.catch((e) => setStatus((e as Error).message, true)); };
 
