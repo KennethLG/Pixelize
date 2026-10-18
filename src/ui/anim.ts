@@ -9,6 +9,7 @@ import { app, onResult } from './app';
 import { $, cssVar, field, int, isChecked, onAll, radio, reducedMotion, setStatus, wait } from './dom';
 import { syncSplit } from './controls';
 import { baseName, canvasBlob, canvasBytes, saveBlob } from './downloads';
+import { currentMode } from './mode';
 import { currentStep, onStep } from './steps';
 
 interface Anim {
@@ -330,7 +331,7 @@ const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRigh
 // control that uses them (sliders, radios, number fields) has the focus.
 function onKeyDown(e: KeyboardEvent): void {
   const d = ARROWS[e.key];
-  if (!d || currentStep() !== 'frames' || selected === null || e.altKey || e.ctrlKey || e.metaKey) return;
+  if (!d || currentMode() !== 'pixelize' || currentStep() !== 'frames' || selected === null || e.altKey || e.ctrlKey || e.metaKey) return;
   if ((e.target as HTMLElement).matches?.('input, select, textarea')) return;
   e.preventDefault();
   nudge(selected, d[0], d[1]);
@@ -534,4 +535,11 @@ export function initAnim(): void {
 }
 
 /** Read-only view for checking the page from the console. */
+/** The frames of the animation as they play (aligned, in order), or null when there is no animation. */
+export function animFrameCanvases(): HTMLCanvasElement[] | null {
+  if (!anim || !isChecked('animOn')) return null;
+  const act = activeFrames();
+  return act.length > 1 ? act.map((i) => anim!.canvases[i]) : null;
+}
+
 export const animState = () => ({ anim, order: [...order], excluded: [...excluded], selected, playing, holds: [...holds], offsets: [...offsets] });

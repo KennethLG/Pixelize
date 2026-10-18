@@ -27,10 +27,14 @@ export const cssVar = (name: string) => getComputedStyle(document.documentElemen
 
 export const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// Both modes have a status line; only the visible one is seen.
 export function setStatus(msg: string, isError = false): void {
-  const s = $('status');
-  s.textContent = msg;
-  s.classList.toggle('err', isError);
+  for (const id of ['status', 'spStatus']) {
+    const s = document.getElementById(id);
+    if (!s) continue;
+    s.textContent = msg;
+    s.classList.toggle('err', isError);
+  }
 }
 
 export const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

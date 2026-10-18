@@ -8,13 +8,18 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
 </head>
-<body data-step="image">
+<body data-step="image" data-mode="pixelize">
 <div class="wrap">
   <header class="top">
     <h1>Pixelize</h1>
-    <p>Fake AI pixel art in, real pixel art out.</p>
+    <p data-mode-show="pixelize">Fake AI pixel art in, real pixel art out.</p>
+    <div class="modes" role="group" aria-label="Mode">
+      <button type="button" class="mode" data-mode-btn="pixelize" aria-pressed="true">Pixelize an image</button>
+      <button type="button" class="mode" data-mode-btn="sprite" aria-pressed="false">Sprite editor</button>
+    </div>
   </header>
 
+  <div id="pixelizeMode">
   <nav class="steps" aria-label="Steps">
     <button type="button" class="step" data-step="image"><b>1</b><span>Image</span></button>
     <button type="button" class="step" data-step="grid"><b>2</b><span>Pixels</span></button>
@@ -215,6 +220,7 @@
             <button type="button" id="dlN" class="ghost">PNG ×8</button>
           </div>
           <p class="hint">1× is the real pixel art. The scaled copy is for sharing.</p>
+          <button type="button" class="ghost" id="toSprite">Edit in the sprite editor</button>
         </div>
         <div class="sub" id="animExport">
           <span class="label">Animation</span>
@@ -366,6 +372,192 @@
         </div>
       </div>
     </section>
+  </div>
+  </div>
+
+  <!-- ===== Sprite editor ===== -->
+  <div id="spriteMode" class="sprite" hidden>
+    <div class="sp-bar panel">
+      <div class="group">
+        <button type="button" class="ghost small" id="spOpen" title="Open a PNG, a _stripN.png strip or a .pixelize file">Open…</button>
+        <input type="file" id="spFile" accept="image/*,.pixelize,.json" hidden>
+        <button type="button" class="ghost small" id="spSave" title="Save layers and frames as a .pixelize file">Save project</button>
+      </div>
+      <div class="group">
+        <input type="number" id="spW" min="1" max="2048" value="32" aria-label="Width"><span class="muted">×</span><input type="number" id="spH" min="1" max="2048" value="32" aria-label="Height">
+        <button type="button" class="ghost small" id="spNew" title="Start a blank sprite of this size">New</button>
+        <button type="button" class="ghost small" id="spResize" title="Change the canvas size, keeping the art centered">Resize canvas</button>
+      </div>
+      <div class="group">
+        <button type="button" class="ghost small" id="spUndo" title="Undo (Ctrl+Z)">Undo</button>
+        <button type="button" class="ghost small" id="spRedo" title="Redo (Ctrl+Y)">Redo</button>
+      </div>
+      <div class="group sp-export">
+        <span class="muted">Export</span>
+        <input type="number" id="spScale" min="1" max="64" value="1" aria-label="Export scale" title="Scale"><span class="muted">×</span>
+        <button type="button" class="small" id="spExportPng" title="The current frame">PNG</button>
+        <button type="button" class="small" id="spExportStrip" title="All frames side by side, named _stripN.png for GameMaker">Strip</button>
+        <button type="button" class="small" id="spExportGif">GIF</button>
+      </div>
+      <p class="status" id="spStatus" role="status"></p>
+    </div>
+
+    <div class="sp-main">
+      <div class="sp-tools panel" role="toolbar" aria-label="Tools" aria-orientation="vertical">
+        <button type="button" class="tool sp-tool" data-sptool="pencil" aria-label="Pencil" title="Pencil (B)&#10;Right click: secondary color. Shift+click: straight line. Alt+click: pick a color.">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.2-4.6L15.6 5a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z"/><path d="M14 6.6l3.4 3.4"/></svg><kbd>B</kbd>
+        </button>
+        <button type="button" class="tool sp-tool" data-sptool="eraser" aria-label="Eraser" title="Eraser (E)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20l-6-6a1.5 1.5 0 0 1 0-2.1L12.9 3a1.5 1.5 0 0 1 2.1 0L21 9a1.5 1.5 0 0 1 0 2.1L12 20z"/><path d="M8 9l7 7"/><path d="M12 20h8"/></svg><kbd>E</kbd>
+        </button>
+        <button type="button" class="tool sp-tool" data-sptool="bucket" aria-label="Paint bucket" title="Paint bucket (G)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.5L11 4l7.5 7.5L11 19z"/><path d="M3.5 11.5h15"/><path d="M8 3l3 1"/><path d="M20.5 15.5s1.5 2 1.5 3a1.5 1.5 0 0 1-3 0c0-1 1.5-3 1.5-3z"/></svg><kbd>G</kbd>
+        </button>
+        <button type="button" class="tool sp-tool" data-sptool="rect" aria-label="Rectangle" title="Rectangle (U)&#10;Shift: square.">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="1"/></svg><kbd>U</kbd>
+        </button>
+        <button type="button" class="tool sp-tool" data-sptool="picker" aria-label="Eyedropper" title="Eyedropper (I)&#10;Right click: sets the secondary color.">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 6.5l4 4"/><path d="M16 4.5a2.1 2.1 0 0 1 3 0l.5.5a2.1 2.1 0 0 1 0 3L17.5 10l-4-4z"/><path d="M14.5 8.5L6 17v3h3l8.5-8.5"/></svg><kbd>I</kbd>
+        </button>
+        <hr>
+        <button type="button" class="tool sp-tool" data-sptool="select" aria-label="Select" title="Select a rectangle (M)&#10;Shift adds, Alt subtracts. Drag inside to move, drag the squares to resize.">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" /><path d="M11 4h2M11 20h2M4 11v2M20 11v2"/></svg><kbd>M</kbd>
+        </button>
+        <button type="button" class="tool sp-tool" data-sptool="wand" aria-label="Select by color" title="Select by color (W)&#10;Shift adds, Alt subtracts.">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20L14 10"/><path d="M12.5 8.5l3 3"/><path d="M17 3v3M15.5 4.5h3"/><path d="M20 9v2M19 10h2"/><path d="M9.5 3.5v2M8.5 4.5h2"/></svg><kbd>W</kbd>
+        </button>
+        <button type="button" class="tool sp-tool" data-sptool="move" aria-label="Move" title="Move the selection, or the whole layer when nothing is selected (V)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18"/><path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg><kbd>V</kbd>
+        </button>
+        <button type="button" class="tool sp-tool" data-sptool="pan" aria-label="Hand" title="Move the view (H, or hold Space)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M11 10.5V4a1.5 1.5 0 0 1 3 0v7"/><path d="M14 10.5V6a1.5 1.5 0 0 1 3 0v7.5A6.5 6.5 0 0 1 10.5 20h-.3a6 6 0 0 1-5-2.7l-2.4-3.7a1.5 1.5 0 0 1 2.4-1.8L8 14"/></svg><kbd>H</kbd>
+        </button>
+      </div>
+
+      <div class="sp-center">
+        <div class="sp-options panel">
+          <div class="group" data-for="pencil eraser rect">
+            <span class="muted">Brush</span>
+            <input type="range" id="spBrushR" min="1" max="16" value="1" aria-label="Brush size slider">
+            <input type="number" id="spBrush" min="1" max="32" value="1" aria-label="Brush size in pixels"><span class="muted">px <kbd>[</kbd> <kbd>]</kbd></span>
+          </div>
+          <div class="seg small" role="radiogroup" aria-label="Rectangle" data-for="rect">
+            <label><input type="radio" name="spRectMode" value="outline" checked>Outline</label>
+            <label><input type="radio" name="spRectMode" value="filled">Filled</label>
+          </div>
+          <label class="check" data-for="bucket wand"><input type="checkbox" class="spContig" checked>Only connected pixels</label>
+          <span class="hint" data-for="select wand">Shift adds, Alt subtracts. Drag inside the selection to move it, or its squares to resize it.</span>
+          <span class="hint" data-for="move">Drag to move the selection, or the whole layer if nothing is selected. Arrow keys move 1 px.</span>
+          <span class="hint" data-for="picker">Left click: primary color. Right click: secondary.</span>
+          <span class="hint" data-for="pan">Drag to move the view. Scroll to zoom.</span>
+          <div class="group sp-sel" id="spSelActions" hidden>
+            <span class="tag" id="spSelInfo"></span>
+            <button type="button" class="ghost small" id="spGrow" title="Make it twice as big">×2</button>
+            <button type="button" class="ghost small" id="spShrink" title="Make it half as big">½</button>
+            <button type="button" class="ghost small" id="spFlipH" title="Flip horizontally">Flip ↔</button>
+            <button type="button" class="ghost small" id="spFlipV" title="Flip vertically">Flip ↕</button>
+            <button type="button" class="ghost small" id="spCopy" title="Copy (Ctrl+C)">Copy</button>
+            <button type="button" class="ghost small" id="spCut" title="Cut (Ctrl+X)">Cut</button>
+            <button type="button" class="ghost small" id="spSelDelete" title="Delete">Delete</button>
+            <button type="button" class="ghost small" id="spApply" title="Put the moved pixels down (Enter)">Apply</button>
+            <button type="button" class="ghost small" id="spDeselect" title="Deselect (Ctrl+D or Esc)">Deselect</button>
+          </div>
+          <button type="button" class="ghost small sp-selall" id="spSelAll" title="Select all (Ctrl+A)">Select all</button>
+        </div>
+
+        <div class="panel sp-canvas-panel">
+          <div class="sp-stage" id="spStage"><canvas id="spCanvas" tabindex="0" aria-label="Sprite canvas"></canvas></div>
+          <div class="toolbar">
+            <div class="group">
+              <button type="button" class="ghost small" id="spZoomOut" title="Zoom out (−)" aria-label="Zoom out">−</button>
+              <output id="spZoom">800%</output>
+              <button type="button" class="ghost small" id="spZoomIn" title="Zoom in (+)" aria-label="Zoom in">+</button>
+              <button type="button" class="ghost small" id="spFit" title="Fit (0)">Fit</button>
+              <label class="check"><input type="checkbox" id="spGrid" checked>Grid</label>
+              <label class="check"><input type="checkbox" id="spOnion">Onion skin</label>
+            </div>
+            <div class="group" role="group" aria-label="Paper">
+              <span class="muted">Paper</span>
+              <div class="seg small" role="radiogroup" aria-label="Paper background">
+                <label><input type="radio" name="spPaper" value="checker" checked>Checker</label>
+                <label><input type="radio" name="spPaper" value="color">Color</label>
+              </div>
+              <input type="color" id="spPaperColor" value="#ffffff" aria-label="Paper color" title="Paper color">
+            </div>
+            <code class="muted" id="spPos"></code>
+          </div>
+        </div>
+      </div>
+
+      <aside class="sp-side">
+        <div class="panel sp-color">
+          <div class="sp-slots">
+            <button type="button" class="sp-slot" id="spPrimary" aria-label="Primary color"></button>
+            <button type="button" class="sp-slot" id="spSecondary" aria-label="Secondary color"></button>
+            <button type="button" class="ghost small" id="spSwap" title="Swap colors (X)">⇄</button>
+            <button type="button" class="ghost small" id="spClearColor" title="Make this color transparent (draws like an eraser)">Clear</button>
+            <input type="text" id="spHex" maxlength="7" aria-label="Hex color" spellcheck="false">
+          </div>
+          <canvas id="spSV" width="240" height="140" aria-label="Saturation and brightness"></canvas>
+          <canvas id="spHue" width="240" height="14" aria-label="Hue"></canvas>
+        </div>
+
+        <div class="panel sp-palettes">
+          <div class="pal-head"><span class="label">In this sprite · <span id="spUsedCount">0</span></span></div>
+          <div class="sp-swatches" id="spUsed"></div>
+          <p class="hint" id="spUsedEmpty">The colors you draw with show up here.</p>
+          <div class="pal-head sp-pal-head">
+            <span class="label" title="Click: primary. Right click: secondary. Ctrl+click removes a color.">My palette</span>
+            <div class="group">
+              <button type="button" class="ghost small" id="spPalAdd" title="Add the primary color">+ Add</button>
+              <button type="button" class="ghost small" id="spPalUsed" title="Add every color of the sprite">+ Sprite</button>
+              <button type="button" class="ghost small" id="spPalImport" title="Load a .hex, .gpl or PNG palette">Load</button>
+              <button type="button" class="ghost small" id="spPalClear" title="Remove every color">Clear</button>
+            </div>
+          </div>
+          <input type="file" id="spPalFile" accept="image/*,.hex,.gpl,.txt,.pal" hidden>
+          <div class="sp-swatches" id="spPal"></div>
+          <p class="hint" id="spPalEmpty">Empty. Add colors or load a Lospec palette.</p>
+        </div>
+
+        <div class="panel sp-layers-panel">
+          <div class="pal-head">
+            <span class="label">Layers</span>
+            <div class="group">
+              <button type="button" class="ghost small" id="spLayerAdd" title="New layer">+</button>
+              <button type="button" class="ghost small" id="spLayerDup" title="Duplicate layer">Dup</button>
+              <button type="button" class="ghost small" id="spLayerUp" title="Move up" aria-label="Move layer up">↑</button>
+              <button type="button" class="ghost small" id="spLayerDown" title="Move down" aria-label="Move layer down">↓</button>
+              <button type="button" class="ghost small" id="spLayerMerge" title="Merge into the layer below">Merge</button>
+              <button type="button" class="ghost small" id="spLayerDel" title="Delete layer" aria-label="Delete layer">×</button>
+            </div>
+          </div>
+          <div class="sp-layers" id="spLayers"></div>
+          <div class="row"><span>Opacity</span><input type="range" id="spOpacity" min="0" max="100" value="100" aria-label="Layer opacity"><output id="spOpacityOut">100%</output></div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="panel sp-timeline">
+      <div class="sp-preview">
+        <div class="stage"><canvas id="spPreview" width="32" height="32" aria-label="Animation preview"></canvas></div>
+        <button type="button" class="ghost small" id="spPlay" title="Play or pause (P)">Play</button>
+      </div>
+      <div class="sp-frames-col">
+        <div class="frames sp-frames" id="spFrames" title="Drag frames to reorder them. , and . go to the previous and next frame, P plays."></div>
+        <div class="row sel-row">
+          <span class="frame-info" id="spFrameInfo"></span>
+          <button type="button" class="ghost small" id="spFrameAdd" title="New empty frame">+ Frame</button>
+          <button type="button" class="ghost small" id="spFrameDup" title="Copy of this frame">Duplicate</button>
+          <button type="button" class="ghost small" id="spFrameLeft" aria-label="Move frame earlier">◀</button>
+          <button type="button" class="ghost small" id="spFrameRight" aria-label="Move frame later">▶</button>
+          <button type="button" class="ghost small" id="spFrameDel" title="Delete this frame">Delete</button>
+          <span class="muted">Duration</span>
+          <input type="number" id="spDuration" min="10" max="10000" step="10" value="100" aria-label="Frame duration in ms"><span class="muted">ms</span>
+          <button type="button" class="ghost small" id="spDurationAll" title="Give every frame this duration">All</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 <script type="module" src="/src/main.ts"></script>

@@ -5,6 +5,7 @@ import { hex, hexToRgb, keyAt, type RGB, type RGBA } from '../core/color';
 import { app, canRedo, canUndo, commitEdits, onResult, onSource, pushUndo, redo, schedule, undo } from './app';
 import { $, cssVar, field, isChecked, num } from './dom';
 import { saveSettings } from './settings';
+import { currentMode } from './mode';
 import { currentStep, onStep } from './steps';
 
 type Tool = 'pan' | 'pencil' | 'eraser' | 'fill' | 'picker' | 'bg';
@@ -261,6 +262,7 @@ function endGesture(): void {
 }
 
 function onKeyDown(e: KeyboardEvent): void {
+  if (currentMode() !== 'pixelize') return;
   const target = e.target as HTMLElement;
   if (target.matches?.('input[type="text"], input[type="number"], textarea')) return;
   const mod = e.ctrlKey || e.metaKey;
@@ -321,7 +323,7 @@ export function initEditor(): void {
 
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('keyup', (e) => {
-    if (e.key === ' ' && spaceHeld) { spaceHeld = false; stage().classList.toggle('pan', tool === 'pan'); draw(); }
+    if (e.key === ' ' && spaceHeld && currentMode() === 'pixelize') { spaceHeld = false; stage().classList.toggle('pan', tool === 'pan'); draw(); }
   });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
 

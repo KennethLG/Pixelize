@@ -12,7 +12,7 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
-    minWidth: 800,
+    minWidth: 960,
     minHeight: 600,
     backgroundColor: '#14121a',
     title: 'Pixelize',

@@ -10,11 +10,14 @@ import { initControls } from './ui/controls';
 import { initViews } from './ui/views';
 import { initPalettePanel } from './ui/palettePanel';
 import { initEditor } from './ui/editor';
-import { initAnim, animState } from './ui/anim';
+import { initAnim, animState, animFrameCanvases } from './ui/anim';
 import { initDownloads } from './ui/downloads';
 import { initBatch, runBatch } from './ui/batch';
 import { initInput, loadSample, sampleCanvas } from './ui/input';
 import { goTo, initSteps } from './ui/steps';
+import { currentMode, initMode, onMode, setMode } from './ui/mode';
+import { initSprite, loadFrames, showSprite, spriteState } from './ui/sprite';
+import { $ } from './ui/dom';
 
 startWorker();
 initSettings();
@@ -28,5 +31,14 @@ initBatch();
 initInput();
 initSteps();
 
+// the sprite editor reads paste and drop events first while it is open
+initSprite(() => currentMode() === 'sprite');
+onMode((m) => { if (m === 'sprite') showSprite(); });
+$('toSprite').addEventListener('click', () => {
+  if (!app.result) return;
+  if (loadFrames(animFrameCanvases() ?? [app.resultCanvas], app.source?.name || 'sprite')) setMode('sprite');
+});
+initMode();
+
 // Handle for inspecting the page from the browser console.
-Object.assign(window, { pixelize: { app, schedule, isBusy, usingWorker, animState, runBatch, sampleCanvas, loadSample, goTo } });
+Object.assign(window, { pixelize: { app, schedule, setMode, spriteState, isBusy, usingWorker, animState, runBatch, sampleCanvas, loadSample, goTo } });
