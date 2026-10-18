@@ -19,6 +19,7 @@ import {
 } from '../../core/bitmap';
 import type { RGB, RGBA } from '../../core/color';
 import { cloneDoc, createDoc, type SpriteDoc } from '../../core/sprite';
+import { createBus } from '../bus';
 
 export type SpEvent = 'pixels' | 'structure' | 'cursor' | 'selection' | 'color' | 'tool' | 'paper' | 'view' | 'hover' | 'palette' | 'playback';
 export type Tool = 'pan' | 'pencil' | 'eraser' | 'bucket' | 'picker' | 'rect' | 'ellipse' | 'select' | 'wand' | 'move' | 'canvas';
@@ -58,23 +59,9 @@ export const sp = {
   name: 'sprite',
 };
 
-const listeners = new Map<SpEvent, Set<() => void>>();
-/** How many times each event fired; React reads it to know when to re-render. */
-export const versions = new Map<SpEvent, number>();
-
-/** Listens to an event. Returns a function that stops listening. */
-export function on(ev: SpEvent, fn: () => void): () => void {
-  if (!listeners.has(ev)) listeners.set(ev, new Set());
-  listeners.get(ev)!.add(fn);
-  return () => { listeners.get(ev)!.delete(fn); };
-}
-
-export function emit(...evs: SpEvent[]): void {
-  for (const ev of new Set(evs)) {
-    versions.set(ev, (versions.get(ev) || 0) + 1);
-    for (const fn of [...(listeners.get(ev) || [])]) fn();
-  }
-}
+export const spBus = createBus<SpEvent>();
+/** on() returns a function that stops listening; versions counts how many times each event fired. */
+export const { on, emit, versions } = spBus;
 
 export const cel = (frame = sp.frame, layer = sp.layer) => sp.doc.frames[frame].cels[layer];
 
