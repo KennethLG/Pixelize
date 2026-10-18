@@ -1,5 +1,6 @@
 // Colors: primary/secondary swatches, the in-app HSV picker, the colors used
-// in the sprite and the user's own palette (kept in this browser).
+// in the sprite and the user's own palette (kept in this browser). The same
+// picker also edits the paper color when its swatch (under the canvas) is chosen.
 
 import { hex, hexToRgb, keyOf, rgbOfKey, type RGB, type RGBA } from '../../core/color';
 import { parsePaletteText } from '../../core/paletteText';
@@ -9,7 +10,8 @@ import { decodeFile, imageToData } from '../input';
 import { emit, on, setColor, sp } from './state';
 
 const PAL_KEY = 'pixelize.sprite.palette';
-let slot: 'primary' | 'secondary' = 'primary';
+type Slot = 'primary' | 'secondary' | 'paper';
+let slot: Slot = 'primary';
 let hsv: [number, number, number] = [0, 0, 0];  // the picker's color, kept so hue survives greys
 let userPalette: RGB[] = [];
 
@@ -28,7 +30,22 @@ function hsvToRgb(h: number, s: number, v: number): RGB {
   return [Math.round(f(5) * 255), Math.round(f(3) * 255), Math.round(f(1) * 255)];
 }
 
-const active = (): RGBA => sp[slot];
+const active = (): RGBA => (slot === 'paper' ? [...sp.paperColor, 255] : sp[slot]);
+
+function setActive(c: RGBA): void {
+  if (slot !== 'paper') { setColor(slot, c); return; }
+  sp.paperColor = [c[0], c[1], c[2]];
+  sp.paperMode = 'color';
+  emit('paper');
+}
+
+/** Chooses what the picker edits. */
+function pick(s: Slot): void {
+  slot = s;
+  hsv = [hsv[0], 0, 0];
+  if (s === 'paper' && sp.paperMode !== 'color') { sp.paperMode = 'color'; emit('paper'); }
+  syncFromColor();
+}
 
 function drawPicker(): void {
   const sv = $<HTMLCanvasElement>('spSV'), hue = $<HTMLCanvasElement>('spHue');
@@ -70,6 +87,10 @@ function syncFromColor(): void {
     el.classList.toggle('on', s === slot);
     el.title = `${s === 'primary' ? 'Primary (left click)' : 'Secondary (right click)'}: ${v[3] ? hex(v) : 'transparent'}`;
   }
+  const paperEl = $('spPaperColor');
+  paperEl.classList.toggle('on', slot === 'paper');
+  paperEl.title = `Paper color: ${hex(sp.paperColor)}. Click to edit it with the color picker.`;
+  $('spEditing').textContent = slot === 'paper' ? 'Paper' : '';
   const hexInput = field('spHex');
   if (document.activeElement !== hexInput) hexInput.value = c[3] ? hex(c) : '';
   hexInput.placeholder = c[3] ? '' : 'transparent';
@@ -78,7 +99,7 @@ function syncFromColor(): void {
 
 function setFromHsv(): void {
   const [r, g, b] = hsvToRgb(...hsv);
-  setColor(slot, [r, g, b, 255]);
+  setActive([r, g, b, 255]);
 }
 
 function dragOn(el: HTMLCanvasElement, fn: (x: number, y: number) => void): void {
@@ -106,7 +127,7 @@ function swatch(rgb: RGB, onPick: (e: MouseEvent) => void): HTMLButtonElement {
   b.style.setProperty('--c', hex(rgb));
   b.dataset.key = String(keyOf(rgb[0], rgb[1], rgb[2]));
   b.title = hex(rgb);
-  b.addEventListener('click', onPick);
+  b.addEventListener('click', (e) => { if (slot === 'paper') pick('primary'); onPick(e); });
   b.addEventListener('contextmenu', (e) => { e.preventDefault(); setColor('secondary', [...rgb, 255]); });
   return b;
 }
@@ -178,13 +199,18 @@ export function initColors(): void {
 
   dragOn($<HTMLCanvasElement>('spSV'), (x, y) => { hsv = [hsv[0], x, 1 - y]; setFromHsv(); });
   dragOn($<HTMLCanvasElement>('spHue'), (x) => { hsv = [Math.min(359.9, x * 360), hsv[1] || 1, hsv[2] || 1]; setFromHsv(); });
-  $('spPrimary').addEventListener('click', () => { slot = 'primary'; hsv = [hsv[0], 0, 0]; syncFromColor(); });
-  $('spSecondary').addEventListener('click', () => { slot = 'secondary'; hsv = [hsv[0], 0, 0]; syncFromColor(); });
+  $('spPrimary').addEventListener('click', () => pick('primary'));
+  $('spSecondary').addEventListener('click', () => pick('secondary'));
+  $('spPaperColor').addEventListener('click', () => pick('paper'));
   $('spSwap').addEventListener('click', swapColors);
-  $('spClearColor').addEventListener('click', () => setColor(slot, [0, 0, 0, 0]));
+  // "Clear" on the paper goes back to the checkerboard
+  $('spClearColor').addEventListener('click', () => {
+    if (slot === 'paper') { sp.paperMode = 'checker'; emit('paper'); pick('primary'); }
+    else setColor(slot, [0, 0, 0, 0]);
+  });
   field('spHex').addEventListener('change', () => {
     const v = field('spHex').value.trim().replace(/^#?/, '#');
-    if (/^#[0-9a-f]{6}$/i.test(v)) setColor(slot, [...hexToRgb(v), 255]);
+    if (/^#[0-9a-f]{6}$/i.test(v)) setActive([...hexToRgb(v), 255]);
     else syncFromColor();
   });
   $('spPalAdd').addEventListener('click', () => { const c = sp.primary; if (c[3]) addToPalette([[c[0], c[1], c[2]]]); });
@@ -198,6 +224,7 @@ export function initColors(): void {
   });
 
   on('color', syncFromColor);
+  on('paper', () => { if (slot === 'paper' && sp.paperMode !== 'color') slot = 'primary'; syncFromColor(); });
   // the colors in use only change when a stroke ends, and scanning every cel can wait a moment
   on('pixels', () => { clearTimeout(usedTimer); usedTimer = window.setTimeout(renderUsed, 150); });
   on('structure', () => { clearTimeout(usedTimer); usedTimer = window.setTimeout(renderUsed, 150); });

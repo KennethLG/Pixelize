@@ -7,15 +7,16 @@
 //   selection the selection or the floating piece changed
 //   color     primary/secondary color changed
 //   tool      the tool or its options changed
+//   paper     the background behind the sprite changed
 
 import {
   blit, clearMasked, extract, floatingMask, renderFloating, type Bitmap, type Floating, type Mask,
 } from '../../core/bitmap';
-import type { RGBA } from '../../core/color';
+import type { RGB, RGBA } from '../../core/color';
 import { cloneDoc, createDoc, type SpriteDoc } from '../../core/sprite';
 
-export type SpEvent = 'pixels' | 'structure' | 'cursor' | 'selection' | 'color' | 'tool';
-export type Tool = 'pan' | 'pencil' | 'eraser' | 'bucket' | 'picker' | 'rect' | 'select' | 'wand' | 'move';
+export type SpEvent = 'pixels' | 'structure' | 'cursor' | 'selection' | 'color' | 'tool' | 'paper';
+export type Tool = 'pan' | 'pencil' | 'eraser' | 'bucket' | 'picker' | 'rect' | 'ellipse' | 'select' | 'wand' | 'move' | 'canvas';
 
 /** A floating piece also remembers its layer, frame, and the cel before it was lifted (for undo). */
 export interface Float extends Floating { frame: number; layer: number; before: Uint8ClampedArray }
@@ -30,8 +31,14 @@ export const sp = {
   secondary: [0, 0, 0, 0] as RGBA,
   tool: 'pencil' as Tool,
   brush: 1,
-  rectFilled: false,
-  contiguous: true,
+  rectFilled: false,       // rectangles and ellipses
+  contiguous: true,        // select by color
+  bucketMode: 'fill' as 'fill' | 'replace',
+  replaceAllFrames: false,
+  canvasMode: 'keep' as 'keep' | 'stretch',
+  /** what shows behind the sprite (only for looking at; exports stay transparent) */
+  paperMode: 'checker' as 'checker' | 'color',
+  paperColor: [255, 255, 255] as RGB,
   onion: false,
   /** the current layer's cel with a shape still being dragged out (rectangle tool) */
   preview: null as Bitmap | null,
@@ -66,10 +73,10 @@ export function pushCel(frame = sp.frame, layer = sp.layer, px?: Uint8ClampedArr
   redoStack = [];
 }
 
-/** Call before any change to layers, frames or the canvas size. */
-export function pushDoc(): void {
+/** Call before any change to layers, frames or the canvas size. `prev` is the document as it was, when the caller already changed it. */
+export function pushDoc(prev?: SpriteDoc): void {
   commitFloating();
-  record(undoStack, { t: 'doc', doc: cloneDoc(sp.doc), frame: sp.frame, layer: sp.layer, mask: sp.mask?.slice() ?? null });
+  record(undoStack, { t: 'doc', doc: prev ?? cloneDoc(sp.doc), frame: sp.frame, layer: sp.layer, mask: sp.mask?.slice() ?? null });
   redoStack = [];
 }
 
@@ -199,6 +206,7 @@ export function setLayer(i: number): void {
 
 export function setTool(t: Tool): void {
   if (!['select', 'wand', 'move', 'pan'].includes(t)) commitFloating();
+  if (t === 'canvas') deselect();
   sp.tool = t;
   emit('tool');
 }

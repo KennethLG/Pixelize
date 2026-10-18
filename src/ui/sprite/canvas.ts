@@ -2,13 +2,13 @@
 // selection outline, scale handles) and the tools.
 
 import {
-  boxOf, colorMask, combineMasks, drawLine, drawRect, fill, getPixel, maskBounds, rectMask,
+  boxOf, colorMask, combineMasks, drawEllipse, drawLine, drawRect, fill, getPixel, maskBounds, rectMask, replaceColor,
   type Box, type MaskOp,
 } from '../../core/bitmap';
-import type { RGBA } from '../../core/color';
-import { composite } from '../../core/sprite';
+import { hex, type RGBA } from '../../core/color';
+import { cloneDoc, composite, cropCanvas, scaleDoc, type SpriteDoc } from '../../core/sprite';
 import { $, cssVar } from '../dom';
-import { cel, commitFloating, deselect, emit, lift, liveCel, on, pushCel, setColor, sp, type Tool } from './state';
+import { cel, commitFloating, deselect, emit, lift, liveCel, on, pushCel, pushDoc, setColor, sp, type Tool } from './state';
 
 type Pt = { x: number; y: number };
 
@@ -21,8 +21,10 @@ let hover: Pt | null = null;
 let spaceHeld = false;
 let lastPaint: Pt | null = null;     // for Shift+click straight lines
 const PAPER_KEY = 'pixelize.sprite.paper';
-/** What shows behind the sprite: a checkerboard, or a flat color. Only for looking at; exports stay transparent. */
-const paper = { mode: 'checker' as 'checker' | 'color', color: '#ffffff' };
+const GRID_KEY = 'pixelize.sprite.grid';
+/** Grid cell size in sprite pixels: 1 × 1 is the pixel grid, bigger sizes mark tiles or frames. */
+const grid = { w: 1, h: 1 };
+const MAX_SIDE = 2048;
 const art = document.createElement('canvas');
 const onionCanvas = document.createElement('canvas');
 
@@ -135,7 +137,7 @@ export function draw(): void {
 
   ctx.save();
   ctx.translate(ox, oy);
-  ctx.fillStyle = paper.mode === 'color' ? paper.color : checkerPattern(ctx);
+  ctx.fillStyle = sp.paperMode === 'color' ? hex(sp.paperColor) : checkerPattern(ctx);
   ctx.fillRect(0, 0, W, H);
   ctx.restore();
   ctx.imageSmoothingEnabled = false;
@@ -151,20 +153,25 @@ export function draw(): void {
   putImage(art, composite(sp.doc, sp.frame, live ? { layer, cel: live } : undefined), w, h);
   ctx.drawImage(art, ox, oy, W, H);
 
-  if (($('spGrid') as HTMLInputElement).checked && z >= 6) {
-    ctx.strokeStyle = cssVar('--pixgrid');
+  if (($('spGrid') as HTMLInputElement).checked) {
+    const lines = (sx: number, sy: number) => {
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += sx) { const X = Math.round(ox + x * z) + 0.5; ctx.moveTo(X, oy); ctx.lineTo(X, oy + H); }
+      for (let y = 0; y <= h; y += sy) { const Y = Math.round(oy + y * z) + 0.5; ctx.moveTo(ox, Y); ctx.lineTo(ox + W, Y); }
+      ctx.stroke();
+    };
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = 0; x <= w; x++) { const X = Math.round(ox + x * z) + 0.5; ctx.moveTo(X, oy); ctx.lineTo(X, oy + H); }
-    for (let y = 0; y <= h; y++) { const Y = Math.round(oy + y * z) + 0.5; ctx.moveTo(ox, Y); ctx.lineTo(ox + W, Y); }
-    ctx.stroke();
+    // the pixel grid when zoomed in, then the bigger cells on top at any zoom
+    if (z >= 6) { ctx.strokeStyle = cssVar('--pixgrid'); lines(1, 1); }
+    if (grid.w > 1 || grid.h > 1) { ctx.strokeStyle = cssVar('--grid'); lines(grid.w, grid.h); }
   }
   ctx.strokeStyle = cssVar('--line');
   ctx.strokeRect(ox - 0.5, oy - 0.5, W + 1, H + 1);
 
   drawSelection(ctx);
+  if (sp.tool === 'canvas') drawCanvasHandles(ctx);
 
-  if (hover && !spaceHeld && inside(hover) && ['pencil', 'eraser', 'rect'].includes(sp.tool) && !gesture) {
+  if (hover && !spaceHeld && inside(hover) && ['pencil', 'eraser', 'rect', 'ellipse'].includes(sp.tool) && !gesture) {
     const o = Math.floor((sp.brush - 1) / 2);
     ctx.strokeStyle = cssVar('--accent');
     ctx.lineWidth = 1.5;
@@ -219,16 +226,42 @@ function drawSelection(ctx: CanvasRenderingContext2D): void {
   }
 }
 
+function drawCanvasHandles(ctx: CanvasRenderingContext2D): void {
+  ctx.strokeStyle = cssVar('--accent');
+  ctx.lineWidth = 2;
+  ctx.strokeRect(view.ox - 1, view.oy - 1, sp.doc.w * view.zoom + 2, sp.doc.h * view.zoom + 2);
+  for (const [, x, y] of handlePoints({ x: 0, y: 0, w: sp.doc.w, h: sp.doc.h })) {
+    ctx.fillStyle = cssVar('--accent');
+    ctx.fillRect(x - 5, y - 5, 10, 10);
+    ctx.strokeStyle = cssVar('--panel');
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x - 5, y - 5, 10, 10);
+  }
+  if (gesture?.type === 'canvas') {
+    const label = `${sp.doc.w} × ${sp.doc.h}`;
+    ctx.font = '600 12px "JetBrains Mono", monospace';
+    const w = ctx.measureText(label).width + 12;
+    const x = view.ox + (sp.doc.w * view.zoom - w) / 2, y = Math.max(4, view.oy - 28);
+    ctx.fillStyle = cssVar('--accent');
+    ctx.fillRect(x, y, w, 20);
+    ctx.fillStyle = cssVar('--accent-ink');
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x + 6, y + 10);
+  }
+}
+
 // ---------- tools ----------
 
 type Gesture =
   | { type: 'pan'; x: number; y: number }
   | { type: 'paint'; color: RGBA; last: Pt; before: Uint8ClampedArray }
-  | { type: 'rect'; color: RGBA; start: Pt; end: Pt }
+  | { type: 'rect'; shape: 'rect' | 'ellipse'; color: RGBA; start: Pt; end: Pt }
   | { type: 'marquee'; start: Pt; end: Pt; op: MaskOp }
   // the pixels are only lifted once the pointer really moves, so a click stays a click
   | { type: 'move'; start: Pt; fx: number; fy: number; lifted: boolean; tool: Tool }
-  | { type: 'scale'; handle: Handle; box: Box | null };
+  | { type: 'scale'; handle: Handle; box: Box | null }
+  // resizing the paper: `orig` is the document before the drag, the view origin stays where it was
+  | { type: 'canvas'; handle: Handle; orig: SpriteDoc; ox0: number; oy0: number; changed: boolean };
 
 let gesture: Gesture | null = null;
 
@@ -241,8 +274,8 @@ const inMask = (p: Pt) => {
 };
 
 function handleAt(e: PointerEvent): Handle | null {
-  const b = selectionBox();
-  if (!b || !showsHandles()) return null;
+  const b = sp.tool === 'canvas' ? { x: 0, y: 0, w: sp.doc.w, h: sp.doc.h } : selectionBox();
+  if (!b || !(showsHandles() || sp.tool === 'canvas')) return null;
   const r = canvas().getBoundingClientRect();
   const x = e.clientX - r.left, y = e.clientY - r.top;
   const r2 = HANDLE / 2 + 2;
@@ -266,8 +299,53 @@ function rectPreview(g: Extract<Gesture, { type: 'rect' }>, square: boolean): vo
   }
   const c = cel();
   const out = { w: c.w, h: c.h, px: c.px.slice() };
-  drawRect(out, boxOf(g.start.x, g.start.y, x, y), sp.rectFilled, sp.brush, g.color, sp.mask);
+  const box = boxOf(g.start.x, g.start.y, x, y);
+  if (g.shape === 'ellipse') drawEllipse(out, box, sp.rectFilled, sp.brush, g.color, sp.mask);
+  else drawRect(out, box, sp.rectFilled, sp.brush, g.color, sp.mask);
   sp.preview = out;
+}
+
+/** Bucket: fills the area under the pointer, or replaces its color (in this frame or in all of them). */
+function bucket(p: Pt, color: RGBA): void {
+  if (!inside(p)) return;
+  if (sp.bucketMode === 'fill') {
+    const c = cel(), before = c.px.slice();
+    if (fill(c, p.x, p.y, color, true, sp.mask)) { pushCel(sp.frame, sp.layer, before); emit('pixels'); }
+    return;
+  }
+  const from = getPixel(cel(), p.x, p.y);
+  if (!sp.replaceAllFrames) {
+    const c = cel(), before = c.px.slice();
+    if (replaceColor(c, from, color, sp.mask)) { pushCel(sp.frame, sp.layer, before); emit('pixels'); }
+    return;
+  }
+  const prev = cloneDoc(sp.doc);
+  let n = 0;
+  for (const f of sp.doc.frames) n += replaceColor(f.cels[sp.layer], from, color, sp.mask);
+  if (n) { pushDoc(prev); emit('pixels', 'structure'); }
+}
+
+/** Live paper resize: new edges from the pointer, in the coordinates of the document before the drag. */
+function resizeTo(g: Extract<Gesture, { type: 'canvas' }>, e: PointerEvent): void {
+  const r = canvas().getBoundingClientRect(), z = view.zoom, o = g.orig;
+  const px = Math.round((e.clientX - r.left - g.ox0) / z), py = Math.round((e.clientY - r.top - g.oy0) / z);
+  let x0 = 0, y0 = 0, x1 = o.w, y1 = o.h;
+  if (g.handle.includes('w')) x0 = Math.max(x1 - MAX_SIDE, Math.min(px, x1 - 1));
+  if (g.handle.includes('e')) x1 = Math.min(x0 + MAX_SIDE, Math.max(px, x0 + 1));
+  if (g.handle.includes('n')) y0 = Math.max(y1 - MAX_SIDE, Math.min(py, y1 - 1));
+  if (g.handle.includes('s')) y1 = Math.min(y0 + MAX_SIDE, Math.max(py, y0 + 1));
+  const w = x1 - x0, h = y1 - y0;
+  if (w === sp.doc.w && h === sp.doc.h && view.ox === g.ox0 + x0 * z && view.oy === g.oy0 + y0 * z) return;
+  const doc = cloneDoc(o);
+  if (sp.canvasMode === 'stretch') scaleDoc(doc, w, h);
+  else cropCanvas(doc, x0, y0, w, h);
+  sp.doc = doc;
+  g.changed = w !== o.w || h !== o.h || x0 !== 0 || y0 !== 0;
+  // the opposite edge stays where it was on screen
+  view.ox = g.ox0 + x0 * z;
+  view.oy = g.oy0 + y0 * z;
+  fitted = `${w}x${h}`;
+  updateCursorInfo(null);
 }
 
 function onPointerDown(e: PointerEvent): void {
@@ -281,7 +359,13 @@ function onPointerDown(e: PointerEvent): void {
     return;
   }
   if (e.button !== 0 && e.button !== 2) return;
-  const tool: Tool = e.altKey && (sp.tool === 'pencil' || sp.tool === 'bucket' || sp.tool === 'rect') ? 'picker' : sp.tool;
+  const tool: Tool = e.altKey && ['pencil', 'bucket', 'rect', 'ellipse'].includes(sp.tool) ? 'picker' : sp.tool;
+  if (tool === 'canvas') {
+    const handle = e.button === 0 ? handleAt(e) : null;
+    if (handle) gesture = { type: 'canvas', handle, orig: cloneDoc(sp.doc), ox0: view.ox, oy0: view.oy, changed: false };
+    else { gesture = { type: 'pan', x: e.clientX, y: e.clientY }; stage().classList.add('panning'); }
+    return;
+  }
 
   if (tool === 'picker') { pickColor(p, e.button === 2 ? 'secondary' : 'primary'); return; }
 
@@ -295,13 +379,9 @@ function onPointerDown(e: PointerEvent): void {
     draw();
     return;
   }
-  if (tool === 'bucket') {
-    const c = cel(), before = c.px.slice();
-    if (fill(c, p.x, p.y, colorFor(e), sp.contiguous, sp.mask)) { pushCel(sp.frame, sp.layer, before); emit('pixels'); }
-    return;
-  }
-  if (tool === 'rect') {
-    gesture = { type: 'rect', color: colorFor(e), start: p, end: p };
+  if (tool === 'bucket') { bucket(p, colorFor(e)); return; }
+  if (tool === 'rect' || tool === 'ellipse') {
+    gesture = { type: 'rect', shape: tool, color: colorFor(e), start: p, end: p };
     rectPreview(gesture, e.shiftKey);
     draw();
     return;
@@ -368,6 +448,8 @@ function onPointerMove(e: PointerEvent): void {
       emit('pixels', 'selection');
     }
     scaleTo(g, lineAt(e), e.shiftKey);
+  } else if (g.type === 'canvas') {
+    resizeTo(g, e);
   }
   draw();
 }
@@ -416,6 +498,13 @@ function endGesture(e: PointerEvent): void {
     if (g.start.x === g.end.x && g.start.y === g.end.y && g.op === 'replace') sp.mask = null;
     if (sp.mask && !sp.mask.some((v) => v)) sp.mask = null;
     emit('selection');
+  } else if (g.type === 'canvas') {
+    if (g.changed) {
+      pushDoc(g.orig);
+      viewTouched = true;
+      emit('structure', 'pixels', 'selection');
+    }
+    draw();
   } else if (g.type === 'move' && !g.lifted) {
     // a click inside the selection: the wand selects again, the marquee deselects
     if (g.tool === 'wand') { commitFloating(); wandAt(g.start, 'replace'); }
@@ -430,7 +519,7 @@ const CURSORS: Record<Handle, string> = { nw: 'nwse-resize', se: 'nwse-resize', 
 
 function updateCursor(e?: PointerEvent): void {
   const c = canvas();
-  if (spaceHeld || sp.tool === 'pan') { c.style.cursor = gesture?.type === 'pan' ? 'grabbing' : 'grab'; return; }
+  if (spaceHeld || sp.tool === 'pan' || (sp.tool === 'canvas' && !(e && handleAt(e)))) { c.style.cursor = gesture?.type === 'pan' ? 'grabbing' : 'grab'; return; }
   const h = e && handleAt(e);
   if (h) { c.style.cursor = CURSORS[h]; return; }
   if (sp.tool === 'move' || (e && (sp.tool === 'select' || sp.tool === 'wand') && !e.shiftKey && !e.altKey && inMask(pixelAt(e)))) { c.style.cursor = 'move'; return; }
@@ -462,27 +551,50 @@ export function selectAll(): void {
   emit('selection');
 }
 
+// The paper color is edited with the color panel's picker (colors.ts); this only shows and remembers it.
 function applyPaper(): void {
-  const root = $('spriteMode');
-  root.classList.toggle('paper-solid', paper.mode === 'color');
-  root.style.setProperty('--paper', paper.color);
-  (document.querySelector(`input[name="spPaper"][value="${paper.mode}"]`) as HTMLInputElement).checked = true;
-  ($('spPaperColor') as HTMLInputElement).value = paper.color;
-  try { localStorage.setItem(PAPER_KEY, JSON.stringify(paper)); } catch { /* storage unavailable */ }
+  const root = $('spriteMode'), color = hex(sp.paperColor);
+  root.classList.toggle('paper-solid', sp.paperMode === 'color');
+  root.style.setProperty('--paper', color);
+  (document.querySelector(`input[name="spPaper"][value="${sp.paperMode}"]`) as HTMLInputElement).checked = true;
+  $('spPaperColor').style.setProperty('--c', color);
+  try { localStorage.setItem(PAPER_KEY, JSON.stringify({ mode: sp.paperMode, color })); } catch { /* storage unavailable */ }
   draw();
+}
+
+function initGrid(): void {
+  const gw = $('spGridW') as HTMLInputElement, gh = $('spGridH') as HTMLInputElement;
+  try {
+    const saved = JSON.parse(localStorage.getItem(GRID_KEY) || 'null') as typeof grid | null;
+    if (saved) { grid.w = saved.w; grid.h = saved.h; }
+  } catch { /* nothing saved */ }
+  const clamp = (v: number) => Math.max(1, Math.min(512, Math.round(v) || 1));
+  const apply = () => {
+    grid.w = clamp(Number(gw.value));
+    grid.h = clamp(Number(gh.value));
+    try { localStorage.setItem(GRID_KEY, JSON.stringify(grid)); } catch { /* storage unavailable */ }
+    draw();
+  };
+  gw.value = String(grid.w = clamp(grid.w));
+  gh.value = String(grid.h = clamp(grid.h));
+  gw.addEventListener('input', apply);
+  gh.addEventListener('input', apply);
+  for (const el of [gw, gh]) el.addEventListener('change', () => { el.value = String(clamp(Number(el.value))); apply(); });
 }
 
 function initPaper(): void {
   try {
-    const saved = JSON.parse(localStorage.getItem(PAPER_KEY) || 'null') as typeof paper | null;
-    if (saved?.mode === 'color' || saved?.mode === 'checker') paper.mode = saved.mode;
-    if (/^#[0-9a-f]{6}$/i.test(saved?.color || '')) paper.color = saved!.color;
+    const saved = JSON.parse(localStorage.getItem(PAPER_KEY) || 'null') as { mode: string; color: string } | null;
+    if (saved?.mode === 'color' || saved?.mode === 'checker') sp.paperMode = saved.mode;
+    if (/^#[0-9a-f]{6}$/i.test(saved?.color || '')) {
+      const v = parseInt(saved!.color.slice(1), 16);
+      sp.paperColor = [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+    }
   } catch { /* nothing saved */ }
   document.querySelectorAll<HTMLInputElement>('input[name="spPaper"]').forEach((r) => r.addEventListener('change', () => {
-    if (r.checked) { paper.mode = r.value as typeof paper.mode; applyPaper(); }
+    if (r.checked) { sp.paperMode = r.value as typeof sp.paperMode; emit('paper'); }
   }));
-  // picking a color switches to it
-  $('spPaperColor').addEventListener('input', () => { paper.color = ($('spPaperColor') as HTMLInputElement).value; paper.mode = 'color'; applyPaper(); });
+  on('paper', applyPaper);
   applyPaper();
 }
 
@@ -491,6 +603,7 @@ export const setSpaceHeld = (v: boolean) => { spaceHeld = v; updateCursor(); dra
 export function initCanvas(): void {
   new ResizeObserver(sizeStage).observe(stage());
   initPaper();
+  initGrid();
   const c = canvas();
   c.addEventListener('pointerdown', onPointerDown);
   c.addEventListener('pointermove', onPointerMove);

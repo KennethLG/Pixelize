@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  blit, boxOf, clearMasked, colorMask, combineMasks, drawLine, drawRect, extract, fill, flip, floatingMask,
-  getPixel, maskBounds, newBitmap, rectMask, scaleNearest, stamp, type Bitmap,
+  blit, boxOf, clearMasked, colorMask, combineMasks, drawEllipse, drawLine, drawRect, extract, fill, flip, floatingMask,
+  getPixel, maskBounds, newBitmap, rectMask, replaceColor, scaleNearest, stamp, type Bitmap,
 } from '../src/core/bitmap';
 import {
-  addFrame, addLayer, composite, createDoc, duplicateFrame, mergeDown, moveFrame, moveLayer, parseDoc,
-  removeLayer, resizeCanvas, serializeDoc, usedColors,
+  addFrame, addLayer, composite, createDoc, cropCanvas, duplicateFrame, mergeDown, moveFrame, moveLayer, parseDoc,
+  removeLayer, resizeCanvas, scaleDoc, serializeDoc, usedColors,
 } from '../src/core/sprite';
 import type { RGBA } from '../src/core/color';
 
@@ -35,6 +35,37 @@ describe('drawing', () => {
     const f = newBitmap(10, 10);
     drawRect(f, boxOf(1, 1, 6, 6), true, 1, RED);
     expect(count(f)).toBe(36);
+  });
+
+  it('ellipses: symmetric, filled inside the outline, touching every side of the box', () => {
+    const f = newBitmap(9, 9);
+    drawEllipse(f, boxOf(0, 0, 8, 8), true, 1, RED);
+    const o = newBitmap(9, 9);
+    drawEllipse(o, boxOf(0, 0, 8, 8), false, 1, RED);
+    expect(getPixel(f, 4, 4)).toEqual(RED);
+    expect(getPixel(o, 4, 4)[3]).toBe(0);
+    for (const [x, y] of [[4, 0], [4, 8], [0, 4], [8, 4]]) expect(getPixel(o, x, y)).toEqual(RED);
+    expect(getPixel(o, 0, 0)[3]).toBe(0);
+    for (let y = 0; y < 9; y++) for (let x = 0; x < 9; x++) expect(getPixel(o, x, y)[3]).toBe(getPixel(o, 8 - x, y)[3]);
+    expect(count(o)).toBeLessThan(count(f));
+    // a thicker outline covers more
+    const t = newBitmap(9, 9);
+    drawEllipse(t, boxOf(0, 0, 8, 8), false, 2, RED);
+    expect(count(t)).toBeGreaterThan(count(o));
+    // tiny boxes still draw
+    const one = newBitmap(3, 3);
+    drawEllipse(one, boxOf(1, 1, 1, 1), false, 1, RED);
+    expect(count(one)).toBe(1);
+  });
+
+  it('replace color changes every pixel of that color only', () => {
+    const b = newBitmap(4, 1);
+    b.px.set(RED, 0); b.px.set(BLUE, 4); b.px.set(RED, 12);
+    expect(replaceColor(b, RED, BLUE)).toBe(2);
+    expect(getPixel(b, 3, 0)).toEqual(BLUE);
+    expect(replaceColor(b, BLUE, BLUE)).toBe(0);
+    expect(replaceColor(b, [0, 0, 0, 0], RED)).toBe(1);
+    expect(getPixel(b, 2, 0)).toEqual(RED);
   });
 
   it('a selection limits drawing', () => {
@@ -169,6 +200,28 @@ describe('sprite document', () => {
     expect(getPixel(d.frames[0].cels[0], 1, 1)).toEqual(RED);
     resizeCanvas(d, 1, 1, 0, 0);
     expect(getPixel(d.frames[0].cels[0], 0, 0)[3]).toBe(0);
+  });
+
+  it('crop canvas keeps pixel size and can grow on any side', () => {
+    const d = createDoc(2, 2);
+    stamp(d.frames[0].cels[0], 0, 0, 1, RED);
+    cropCanvas(d, -3, -1, 6, 4);
+    expect([d.w, d.h]).toEqual([6, 4]);
+    expect(getPixel(d.frames[0].cels[0], 3, 1)).toEqual(RED);
+    cropCanvas(d, 3, 1, 1, 1);
+    expect(getPixel(d.frames[0].cels[0], 0, 0)).toEqual(RED);
+  });
+
+  it('scale doc stretches every frame and layer', () => {
+    const d = createDoc(2, 1);
+    addLayer(d, 1);
+    addFrame(d, 1);
+    stamp(d.frames[1].cels[1], 1, 0, 1, BLUE);
+    scaleDoc(d, 4, 2);
+    expect([d.w, d.h]).toEqual([4, 2]);
+    expect(d.frames.every((f) => f.cels.every((c) => c.w === 4 && c.h === 2))).toBe(true);
+    expect(getPixel(d.frames[1].cels[1], 3, 1)).toEqual(BLUE);
+    expect(getPixel(d.frames[1].cels[1], 1, 1)[3]).toBe(0);
   });
 
   it('colors in use and saving round trip', () => {

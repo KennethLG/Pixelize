@@ -14,7 +14,7 @@ import { initTimeline, togglePlay } from './timeline';
 
 export { loadFrames };
 
-const KEYS: Record<string, Tool> = { h: 'pan', b: 'pencil', e: 'eraser', g: 'bucket', i: 'picker', u: 'rect', m: 'select', w: 'wand', v: 'move' };
+const KEYS: Record<string, Tool> = { h: 'pan', b: 'pencil', e: 'eraser', g: 'bucket', i: 'picker', u: 'rect', o: 'ellipse', m: 'select', w: 'wand', v: 'move', c: 'canvas' };
 
 function setBrush(n: number): void {
   sp.brush = Math.max(1, Math.min(32, Math.round(n) || 1));
@@ -123,9 +123,16 @@ export function initSprite(isActive: () => boolean): void {
   field('spBrush').addEventListener('input', () => setBrush(Number(field('spBrush').value)));
   field('spBrushR').addEventListener('input', () => setBrush(Number(field('spBrushR').value)));
   document.querySelectorAll<HTMLInputElement>('input[name="spRectMode"]').forEach((r) => r.addEventListener('change', () => { sp.rectFilled = r.value === 'filled' && r.checked; }));
-  document.querySelectorAll<HTMLInputElement>('.spContig').forEach((c) => c.addEventListener('change', () => {
-    sp.contiguous = c.checked;
-    document.querySelectorAll<HTMLInputElement>('.spContig').forEach((o) => { o.checked = sp.contiguous; });
+  field('spContig').addEventListener('change', () => { sp.contiguous = field('spContig').checked; });
+  const syncBucket = () => { $('spAllFramesRow').hidden = sp.bucketMode !== 'replace'; };
+  document.querySelectorAll<HTMLInputElement>('input[name="spBucketMode"]').forEach((r) => r.addEventListener('change', () => {
+    if (r.checked) sp.bucketMode = r.value as typeof sp.bucketMode;
+    syncBucket();
+  }));
+  field('spAllFrames').addEventListener('change', () => { sp.replaceAllFrames = field('spAllFrames').checked; });
+  syncBucket();
+  document.querySelectorAll<HTMLInputElement>('input[name="spCanvasMode"]').forEach((r) => r.addEventListener('change', () => {
+    if (r.checked) sp.canvasMode = r.value as typeof sp.canvasMode;
   }));
 
   $('spUndo').addEventListener('click', undo);

@@ -1,7 +1,7 @@
 // The sprite document: a canvas size, layers (bottom first) and frames. Each
 // frame holds one cel (a bitmap) per layer, in the same order as `layers`.
 
-import { newBitmap, type Bitmap } from './bitmap';
+import { newBitmap, scaleNearest, type Bitmap } from './bitmap';
 
 export interface Layer { name: string; visible: boolean; opacity: number }
 export interface Frame { cels: Bitmap[]; duration: number }
@@ -88,7 +88,22 @@ export const moveFrame = (d: SpriteDoc, from: number, to: number) => { if (from 
 
 /** Changes the canvas size. ax/ay (0, 0.5 or 1) say which side stays put: 0.5 keeps the art centered. */
 export function resizeCanvas(d: SpriteDoc, w: number, h: number, ax = 0.5, ay = 0.5): void {
-  const dx = Math.round((w - d.w) * ax), dy = Math.round((h - d.h) * ay);
+  cropCanvas(d, -Math.round((w - d.w) * ax), -Math.round((h - d.h) * ay), w, h);
+}
+
+/** Stretches every cel to w × h (nearest neighbor, so pixels stay crisp). */
+export function scaleDoc(d: SpriteDoc, w: number, h: number): void {
+  for (const f of d.frames) f.cels = f.cels.map((c) => scaleNearest(c, w, h));
+  d.w = w;
+  d.h = h;
+}
+
+/**
+ * New canvas w × h whose top-left corner is at (x0, y0) of the old one. The
+ * art keeps its pixel size: what falls outside is cut, new space is transparent.
+ */
+export function cropCanvas(d: SpriteDoc, x0: number, y0: number, w: number, h: number): void {
+  const dx = -x0, dy = -y0;
   for (const f of d.frames) {
     f.cels = f.cels.map((c) => {
       const out = newBitmap(w, h);

@@ -416,6 +416,9 @@
         <button type="button" class="tool sp-tool" data-sptool="rect" aria-label="Rectangle" title="Rectangle (U)&#10;Shift: square.">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="1"/></svg><kbd>U</kbd>
         </button>
+        <button type="button" class="tool sp-tool" data-sptool="ellipse" aria-label="Ellipse" title="Ellipse (O)&#10;Shift: circle.">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="8.5" ry="7"/></svg><kbd>O</kbd>
+        </button>
         <button type="button" class="tool sp-tool" data-sptool="picker" aria-label="Eyedropper" title="Eyedropper (I)&#10;Right click: sets the secondary color.">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 6.5l4 4"/><path d="M16 4.5a2.1 2.1 0 0 1 3 0l.5.5a2.1 2.1 0 0 1 0 3L17.5 10l-4-4z"/><path d="M14.5 8.5L6 17v3h3l8.5-8.5"/></svg><kbd>I</kbd>
         </button>
@@ -429,6 +432,9 @@
         <button type="button" class="tool sp-tool" data-sptool="move" aria-label="Move" title="Move the selection, or the whole layer when nothing is selected (V)">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18"/><path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg><kbd>V</kbd>
         </button>
+        <button type="button" class="tool sp-tool" data-sptool="canvas" aria-label="Canvas size" title="Canvas size (C)&#10;Drag the squares on the edges of the paper.">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg><kbd>C</kbd>
+        </button>
         <button type="button" class="tool sp-tool" data-sptool="pan" aria-label="Hand" title="Move the view (H, or hold Space)">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M11 10.5V4a1.5 1.5 0 0 1 3 0v7"/><path d="M14 10.5V6a1.5 1.5 0 0 1 3 0v7.5A6.5 6.5 0 0 1 10.5 20h-.3a6 6 0 0 1-5-2.7l-2.4-3.7a1.5 1.5 0 0 1 2.4-1.8L8 14"/></svg><kbd>H</kbd>
         </button>
@@ -436,16 +442,27 @@
 
       <div class="sp-center">
         <div class="sp-options panel">
-          <div class="group" data-for="pencil eraser rect">
+          <div class="group" data-for="pencil eraser rect ellipse">
             <span class="muted">Brush</span>
             <input type="range" id="spBrushR" min="1" max="16" value="1" aria-label="Brush size slider">
             <input type="number" id="spBrush" min="1" max="32" value="1" aria-label="Brush size in pixels"><span class="muted">px <kbd>[</kbd> <kbd>]</kbd></span>
           </div>
-          <div class="seg small" role="radiogroup" aria-label="Rectangle" data-for="rect">
+          <div class="seg small" role="radiogroup" aria-label="Shape" data-for="rect ellipse">
             <label><input type="radio" name="spRectMode" value="outline" checked>Outline</label>
             <label><input type="radio" name="spRectMode" value="filled">Filled</label>
           </div>
-          <label class="check" data-for="bucket wand"><input type="checkbox" class="spContig" checked>Only connected pixels</label>
+          <div class="seg small" role="radiogroup" aria-label="Bucket" data-for="bucket">
+            <label title="Fill the connected area"><input type="radio" name="spBucketMode" value="fill" checked>Fill area</label>
+            <label title="Repaint every pixel of the clicked color on this layer"><input type="radio" name="spBucketMode" value="replace">Replace color</label>
+          </div>
+          <span data-for="bucket"><label class="check" id="spAllFramesRow"><input type="checkbox" id="spAllFrames">In every frame</label></span>
+          <label class="check" data-for="wand"><input type="checkbox" id="spContig" checked>Only connected pixels</label>
+          <span class="hint" data-for="rect ellipse">Shift: square or circle. Right click: secondary color.</span>
+          <div class="seg small" role="radiogroup" aria-label="When the canvas changes size" data-for="canvas">
+            <label title="The art keeps its size; space is added or cut around it"><input type="radio" name="spCanvasMode" value="keep" checked>Keep pixel size</label>
+            <label title="The art stretches with the paper"><input type="radio" name="spCanvasMode" value="stretch">Stretch art</label>
+          </div>
+          <span class="hint" data-for="canvas">Drag the orange squares on the edges of the paper. Drag elsewhere to move the view.</span>
           <span class="hint" data-for="select wand">Shift adds, Alt subtracts. Drag inside the selection to move it, or its squares to resize it.</span>
           <span class="hint" data-for="move">Drag to move the selection, or the whole layer if nothing is selected. Arrow keys move 1 px.</span>
           <span class="hint" data-for="picker">Left click: primary color. Right click: secondary.</span>
@@ -474,6 +491,7 @@
               <button type="button" class="ghost small" id="spZoomIn" title="Zoom in (+)" aria-label="Zoom in">+</button>
               <button type="button" class="ghost small" id="spFit" title="Fit (0)">Fit</button>
               <label class="check"><input type="checkbox" id="spGrid" checked>Grid</label>
+              <input type="number" id="spGridW" min="1" max="512" value="1" aria-label="Grid cell width" title="Grid cell size in pixels (1 = every pixel)"><span class="muted">×</span><input type="number" id="spGridH" min="1" max="512" value="1" aria-label="Grid cell height" title="Grid cell size in pixels (1 = every pixel)">
               <label class="check"><input type="checkbox" id="spOnion">Onion skin</label>
             </div>
             <div class="group" role="group" aria-label="Paper">
@@ -482,7 +500,7 @@
                 <label><input type="radio" name="spPaper" value="checker" checked>Checker</label>
                 <label><input type="radio" name="spPaper" value="color">Color</label>
               </div>
-              <input type="color" id="spPaperColor" value="#ffffff" aria-label="Paper color" title="Paper color">
+              <button type="button" class="sp-slot" id="spPaperColor" aria-label="Paper color"></button>
             </div>
             <code class="muted" id="spPos"></code>
           </div>
@@ -496,6 +514,7 @@
             <button type="button" class="sp-slot" id="spSecondary" aria-label="Secondary color"></button>
             <button type="button" class="ghost small" id="spSwap" title="Swap colors (X)">⇄</button>
             <button type="button" class="ghost small" id="spClearColor" title="Make this color transparent (draws like an eraser)">Clear</button>
+            <span class="tag" id="spEditing"></span>
             <input type="text" id="spHex" maxlength="7" aria-label="Hex color" spellcheck="false">
           </div>
           <canvas id="spSV" width="240" height="140" aria-label="Saturation and brightness"></canvas>

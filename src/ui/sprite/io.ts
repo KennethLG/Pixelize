@@ -3,7 +3,7 @@
 // autosave that brings the last sprite back next time.
 
 import { extract, newBitmap, renderFloating, type Bitmap } from '../../core/bitmap';
-import { DEFAULT_DURATION, composite, createDoc, parseDoc, resizeCanvas, serializeDoc, type SpriteDoc } from '../../core/sprite';
+import { DEFAULT_DURATION, composite, createDoc, parseDoc, resizeCanvas, scaleDoc, serializeDoc, type SpriteDoc } from '../../core/sprite';
 import { encodeGif } from '../../export/gif';
 import { $, field, int, setStatus, wait } from '../dom';
 import { canvasBlob, saveBlob } from '../downloads';
@@ -55,9 +55,10 @@ function resizeSprite(): void {
   if (!size || (size[0] === sp.doc.w && size[1] === sp.doc.h)) return;
   pushDoc();
   sp.mask = null;
-  resizeCanvas(sp.doc, size[0], size[1]);
+  if (sp.canvasMode === 'stretch') scaleDoc(sp.doc, size[0], size[1]);
+  else resizeCanvas(sp.doc, size[0], size[1]);
   emit('structure', 'pixels', 'selection');
-  setStatus(`Canvas is now ${size[0]}×${size[1]}`);
+  setStatus(`Canvas is now ${size[0]}×${size[1]}${sp.canvasMode === 'stretch' ? ' (art stretched)' : ''}`);
 }
 
 /** Builds a document from an image. `frames` > 1 splits a horizontal strip. */
@@ -268,4 +269,6 @@ export function initIo(isActive: () => boolean): void {
   syncSizeInputs();
   on('pixels', scheduleSave);
   on('structure', scheduleSave);
+  // the size fields follow the canvas (it can also change by dragging its edges)
+  on('structure', () => { if (document.activeElement !== field('spW') && document.activeElement !== field('spH')) syncSizeInputs(); });
 }

@@ -326,7 +326,8 @@ body[data-mode="sprite"] .wrap { max-width: 1800px; }
 .sp-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
 .sp-stage canvas:focus-visible { outline-offset: -2px; }
 #spPos { font: 12px var(--font-mono); white-space: pre; }
-#spPaperColor { width: 28px; height: 24px; }
+#spGridW, #spGridH { width: 48px; padding: 2px 5px; }
+#spPaperColor { width: 24px; height: 22px; border-radius: 5px; }
 
 .sp-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .sp-side .panel { padding: 8px 10px; }
@@ -415,3 +416,6 @@ body[data-mode="sprite"] .wrap { max-width: 1800px; }
 }
 .sp-slots .small, .sp-palettes .group .small { padding: 3px 6px; font-size: 12px; }
 .sp-slots input[type="text"] { min-width: 64px; font-size: 12px; }
+.sp-bar, .sp-options { scrollbar-width: none; }
+.sp-bar::-webkit-scrollbar, .sp-options::-webkit-scrollbar { display: none; }
+.sp-options .seg label, .sp-options .check { white-space: nowrap; }

@@ -70,6 +70,53 @@ export function drawRect(b: Bitmap, r: Box, filled: boolean, size: number, c: RG
   }
 }
 
+/** Pixels whose centers fall inside the ellipse that fits box `r`. */
+function ellipseInside(r: Box): Uint8Array {
+  const m = new Uint8Array(r.w * r.h);
+  const rx = r.w / 2, ry = r.h / 2;
+  for (let y = 0; y < r.h; y++) {
+    for (let x = 0; x < r.w; x++) {
+      const dx = (x + 0.5 - rx) / rx, dy = (y + 0.5 - ry) / ry;
+      if (dx * dx + dy * dy <= 1 + 1e-9) m[y * r.w + x] = 1;
+    }
+  }
+  return m;
+}
+
+/** An ellipse (a circle in a square box), filled or as an outline `size` pixels thick. */
+export function drawEllipse(b: Bitmap, r: Box, filled: boolean, size: number, c: RGBA, mask?: Mask | null): void {
+  let shape = ellipseInside(r);
+  if (!filled) {
+    // the outline is what an erosion of `size` steps takes away
+    let inner = shape;
+    for (let k = 0; k < size; k++) {
+      const next = new Uint8Array(inner.length);
+      for (let y = 0; y < r.h; y++) {
+        for (let x = 0; x < r.w; x++) {
+          const i = y * r.w + x;
+          next[i] = inner[i] && x > 0 && y > 0 && x < r.w - 1 && y < r.h - 1
+            && inner[i - 1] && inner[i + 1] && inner[i - r.w] && inner[i + r.w] ? 1 : 0;
+        }
+      }
+      inner = next;
+    }
+    shape = shape.map((v, i) => (v && !inner[i] ? 1 : 0));
+  }
+  for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) if (shape[y * r.w + x]) plot(b, r.x + x, r.y + y, c, mask);
+}
+
+/** Repaints every pixel of color `from` (in the mask, if any). Returns how many changed. */
+export function replaceColor(b: Bitmap, from: RGBA, to: RGBA, mask?: Mask | null): number {
+  if (sameAt(Uint8ClampedArray.from(to), 0, from)) return 0;
+  let n = 0;
+  for (let p = 0; p < b.w * b.h; p++) {
+    if ((mask && !mask[p]) || !sameAt(b.px, p * 4, from)) continue;
+    b.px[p * 4] = to[0]; b.px[p * 4 + 1] = to[1]; b.px[p * 4 + 2] = to[2]; b.px[p * 4 + 3] = to[3];
+    n++;
+  }
+  return n;
+}
+
 /**
  * Mask of the pixels with the same color as (x, y): only the connected area
  * (4-way) when `contiguous`, otherwise every pixel of that color.
