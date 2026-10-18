@@ -28,6 +28,7 @@ npm run build    # type-check, then bundle everything into dist/pixelize.html
 | `src/export/` | GIF and ZIP writers (bytes in, bytes out). |
 | `src/worker.ts` | Runs `processImage` off the main thread. |
 | `src/ui/` | One module per part of the page: `mode` (Pixelize or Sprite editor), `app` (state and processing loop), `steps` (the step-by-step flow), `controls`, `views`, `editor`, `palettePanel`, `anim`, `downloads`, `batch`, `settings`, `input`. |
+| `index.html` + `src/html/` | The page's markup. `index.html` is only the skeleton; each part lives in a partial (`header.html`, `pixelize/<step>.html` and the workspace pieces, `sprite/<area>.html`) pulled in with `<!-- @include path -->`. A small plugin in `vite.config.ts` inlines them at build time, so the output is still one HTML file. |
 | `src/ui/sprite/` | The sprite editor: `state` (document, selection, undo), `canvas` (view and tools), `colors`, `layers`, `timeline`, `io` (open, save, export, clipboard, autosave), `index` (wiring and shortcuts). |
 | `cli/` | The terminal tool. |
 | `test/` | Vitest tests plus helpers (regular grids, an independent GIF decoder). |
@@ -50,14 +51,15 @@ The page walks through seven steps: Image, Pixels, Colors, Background & crop, To
 
 ### Sprite editor
 
-- **Tools:** pencil and eraser with a brush size, paint bucket (connected area or every pixel of that color), rectangle (outline or filled), eyedropper. Left click draws with the primary color, right click with the secondary one; Shift+click draws a straight line, Alt+click picks a color.
+- **Tools:** pencil and eraser with a brush size, paint bucket (fill an area, or replace a color on the layer in this frame or in every frame), rectangle and ellipse (outline or filled, Shift for squares and circles), eyedropper. Left click draws with the primary color, right click with the secondary one; Shift+click draws a straight line, Alt+click picks a color.
+- **Canvas size:** with the Canvas tool, drag the squares on the edges of the paper to resize it live, either keeping the art's pixel size (adding or cutting space on that side) or stretching the art with it. The size fields in the top bar do the same, keeping the art centered.
 - **Selections:** rectangle select and select by color (Shift adds, Alt subtracts). Drag a selection to move it, drag its squares to resize it (Shift keeps the proportions), or use ×2, ½ and the flips. Cut, copy and paste, also with images from other apps.
 - **Colors:** an in-app color picker with hex input, the colors used in the sprite, and your own palette (add colors, or load a Lospec .hex, .gpl or PNG palette).
 - **Layers:** add, duplicate, delete, merge down, hide, rename (double click), opacity, and drag to reorder.
 - **Frames:** add, duplicate, delete, per-frame duration, drag to reorder, onion skin and a live preview.
-- **Paper:** draw over a checkerboard or a flat color of your choice (only for viewing; exports keep transparency). The editor fills the window, with the tools as icons on the left.
+- **Paper and grid:** draw over a checkerboard or a flat color (picked with the app's color picker; only for viewing, exports keep transparency), with the pixel grid and an optional bigger grid (for example 16 × 16 tiles). The editor fills the window, with the tools as icons on the left.
 - **Files:** open a PNG (a `_stripN.png` opens as N frames) or a `.pixelize` project, save the project, export the frame as PNG, all frames as a GameMaker strip, or a GIF. The last sprite is kept in the browser. "Edit in the sprite editor" on the Pixelize Export step sends the result (or its animation frames) over.
 
-Sprite editor shortcuts: B pencil, E eraser, G bucket, U rectangle, I eyedropper, M select, W select by color, V move, H hand, X swap colors, [ ] brush size, Ctrl+A/D select all/none, Ctrl+C/X/V, Delete, Enter puts a moved selection down, Esc deselects, arrow keys nudge the selection, , and . previous/next frame, P play.
+Sprite editor shortcuts: B pencil, E eraser, G bucket, U rectangle, O ellipse, I eyedropper, M select, W select by color, V move, C canvas size, H hand, X swap colors, [ ] brush size, Ctrl+A/D select all/none, Ctrl+C/X/V, Delete, Enter puts a moved selection down, Esc deselects, arrow keys nudge the selection, , and . previous/next frame, P play.
 
 Pixelize shortcuts: H move, B pencil, E eraser, G fill, I eyedropper (Touch up step), +/− zoom, 0 fit, Space drag to pan, Ctrl+Z / Ctrl+Y undo/redo, arrow keys move the selected frame (Animation step).

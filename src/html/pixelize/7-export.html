@@ -1,0 +1,40 @@
+<!-- 7 · Export -->
+<section class="step-panel" data-panel="export" hidden>
+  <h2>Export</h2>
+  <div class="sub">
+    <span class="label">Image</span>
+    <div class="row"><span>Scale</span><input type="number" id="scale" min="1" max="64" value="8" aria-label="Download scale"><span>×</span></div>
+    <div class="btns">
+      <button type="button" id="dl1">PNG 1×</button>
+      <button type="button" id="dlN" class="ghost">PNG ×8</button>
+    </div>
+    <p class="hint">1× is the real pixel art. The scaled copy is for sharing.</p>
+    <button type="button" class="ghost" id="toSprite">Edit in the sprite editor</button>
+  </div>
+  <div class="sub" id="animExport">
+    <span class="label">Animation</span>
+    <button type="button" id="dlStrip">Strip PNG for GameMaker</button>
+    <p class="hint">Saved as <code>_stripN.png</code>, which GameMaker splits into frames on import.</p>
+    <div class="row"><span>GIF scale</span><input type="number" id="gifScale" min="1" max="32" value="4"><button type="button" class="ghost small" id="dlGif" style="flex:1">GIF</button></div>
+    <details class="more">
+      <summary>More formats</summary>
+      <div class="row"><span>Columns</span><input type="number" id="sheetCols" min="0" value="0" aria-label="Sheet columns, 0 for auto"><span>Padding</span><input type="number" id="sheetPad" min="0" value="0" aria-label="Sheet padding in px"></div>
+      <button type="button" class="ghost" id="dlSheet">Sheet PNG</button>
+      <button type="button" class="ghost" id="dlZip">Frames ZIP</button>
+      <label class="check"><input type="checkbox" id="repeatHolds" checked>Repeat frames by their duration</label>
+      <p class="hint">Columns 0 makes a square-ish sheet.</p>
+    </details>
+  </div>
+  <details class="more sub">
+    <summary>Batch: several images at once</summary>
+    <p class="hint">Processes more images with these settings into one .zip. Pixel edits are not applied.</p>
+    <label class="check"><input type="checkbox" id="batchPalette">Snap them all to this palette</label>
+    <button type="button" class="ghost" id="batchBtn">Choose images…</button>
+    <input type="file" id="batchFiles" accept="image/*" multiple hidden>
+    <p class="status" id="batchStatus" role="status"></p>
+  </details>
+  <div class="sub">
+    <p class="hint">Settings are remembered in this browser.</p>
+    <button type="button" class="ghost small" id="resetSettings">Reset all settings</button>
+  </div>
+</section>

@@ -1,0 +1,12 @@
+<div class="panel sp-color">
+  <div class="sp-slots">
+    <button type="button" class="sp-slot" id="spPrimary" aria-label="Primary color"></button>
+    <button type="button" class="sp-slot" id="spSecondary" aria-label="Secondary color"></button>
+    <button type="button" class="ghost small" id="spSwap" title="Swap colors (X)">⇄</button>
+    <button type="button" class="ghost small" id="spClearColor" title="Make this color transparent (draws like an eraser)">Clear</button>
+    <span class="tag" id="spEditing"></span>
+    <input type="text" id="spHex" maxlength="7" aria-label="Hex color" spellcheck="false">
+  </div>
+  <canvas id="spSV" width="240" height="140" aria-label="Saturation and brightness"></canvas>
+  <canvas id="spHue" width="240" height="14" aria-label="Hue"></canvas>
+</div>

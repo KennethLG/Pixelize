@@ -1,0 +1,26 @@
+<!-- 3 · Colors -->
+<section class="step-panel" data-panel="colors" hidden>
+  <h2>Pick the colors</h2>
+  <p>AI images have dozens of almost equal shades. This merges them into a clean palette.</p>
+  <div class="seg" role="radiogroup" aria-label="Palette mode">
+    <label><input type="radio" name="palMode" id="palAuto" value="auto" checked>Auto</label>
+    <label><input type="radio" name="palMode" id="palFixed" value="fixed">Fixed count</label>
+    <label><input type="radio" name="palMode" id="palImported" value="imported">My palette</label>
+  </div>
+  <div class="row" id="tolRow"><span>Merge</span><input type="range" id="tol" min="2" max="30" step="1" value="10" aria-label="Tolerance"><output id="tolOut">10</output></div>
+  <div class="row" id="colorsRow" hidden><span>Colors</span><input type="number" id="colors" min="2" max="256" value="16"></div>
+  <div class="box" id="importBox" hidden>
+    <div class="btns">
+      <button type="button" class="ghost small" id="palFileBtn">Load palette file</button>
+      <button type="button" class="ghost small" id="useResultPal">Use the current colors</button>
+    </div>
+    <input type="file" id="palFile" accept="image/*,.hex,.gpl,.txt,.pal" hidden>
+    <div class="row"><input type="text" id="palText" placeholder="#1b1530 #5a5470 …" aria-label="Paste hex codes"><button type="button" class="ghost small" id="palApply">Apply</button></div>
+    <div class="mini-swatches" id="importSwatches"></div>
+    <p class="hint" id="importInfo">Load a PNG, .hex or .gpl palette (Lospec exports work), or paste hex codes. Every pixel snaps to the nearest color.</p>
+  </div>
+  <p class="hint" id="palHint">Move it right to merge more shades and get fewer colors.</p>
+  <label class="check"><input type="checkbox" id="clean">Remove stray noise pixels</label>
+  <div class="row" id="cleanRow" hidden><span>Strength</span><input type="range" id="cleanStr" min="2" max="40" step="1" value="15"><output id="cleanOut">15</output></div>
+  <p class="hint">Click a color under the image to lock it, replace it or merge it into another one.</p>
+</section>

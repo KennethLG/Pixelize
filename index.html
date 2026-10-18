@@ -10,245 +10,26 @@
 </head>
 <body data-step="image" data-mode="pixelize">
 <div class="wrap">
-  <header class="top">
-    <h1>Pixelize</h1>
-    <p data-mode-show="pixelize">Fake AI pixel art in, real pixel art out.</p>
-    <div class="modes" role="group" aria-label="Mode">
-      <button type="button" class="mode" data-mode-btn="pixelize" aria-pressed="true">Pixelize an image</button>
-      <button type="button" class="mode" data-mode-btn="sprite" aria-pressed="false">Sprite editor</button>
-    </div>
-  </header>
+  <!-- @include header.html -->
 
   <div id="pixelizeMode">
-  <nav class="steps" aria-label="Steps">
-    <button type="button" class="step" data-step="image"><b>1</b><span>Image</span></button>
-    <button type="button" class="step" data-step="grid"><b>2</b><span>Pixels</span></button>
-    <button type="button" class="step" data-step="colors"><b>3</b><span>Colors</span></button>
-    <button type="button" class="step" data-step="clean"><b>4</b><span>Background &amp; crop</span></button>
-    <button type="button" class="step" data-step="edit"><b>5</b><span>Touch up<small>optional</small></span></button>
-    <button type="button" class="step" data-step="frames"><b>6</b><span>Animation<small>optional</small></span></button>
-    <button type="button" class="step" data-step="export"><b>7</b><span>Export</span></button>
-  </nav>
+  <!-- @include pixelize/steps.html -->
 
   <div class="app">
     <aside class="side">
-      <!-- 1 · Image -->
-      <section class="step-panel" data-panel="image">
-        <h2>Choose an image</h2>
-        <p>Start with an AI image that imitates pixel art: big blocky "pixels" of uneven size and slightly noisy colors. Pixelize finds the real grid and rebuilds the art at its true size.</p>
-        <ul class="tips">
-          <li>Drop the file on the box, click it, or paste it with <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
-          <li>PNG works best. A spritesheet with several frames is fine.</li>
-          <li>Everything runs in your browser; nothing is uploaded.</li>
-        </ul>
-        <button type="button" class="ghost" id="sampleBtn">Try it with a sample</button>
-        <p class="hint" id="srcName"></p>
-      </section>
+      <!-- @include pixelize/1-image.html -->
 
-      <!-- 2 · Pixels -->
-      <section class="step-panel" data-panel="grid" hidden>
-        <h2>Find the pixel grid</h2>
-        <p>The orange lines on the original mark each real pixel. If they line up with the blocks, go on. If not, adjust them here.</p>
-        <div class="seg" role="radiogroup" aria-label="Grid mode">
-          <label><input type="radio" name="sizeMode" id="sizeAuto" value="auto" checked>Auto</label>
-          <label><input type="radio" name="sizeMode" id="sizeManual" value="manual">Manual</label>
-          <label><input type="radio" name="sizeMode" id="sizeExact" value="exact">Exact size</label>
-        </div>
-        <div class="box" id="autoBox">
-          <p class="hint" id="gridAutoInfo">Detects the size of the fake pixels on its own.</p>
-          <button type="button" class="ghost small" id="toManual">Fine-tune this grid</button>
-        </div>
-        <div class="box" id="manualBox" hidden>
-          <div class="row pair"><span>Pixel size</span><input type="range" id="cellXr" min="2" max="64" step="0.1" value="16" aria-label="Cell X slider"><input type="number" id="cellX" min="2" step="0.1" value="16" aria-label="Cell X in px"></div>
-          <label class="check"><input type="checkbox" id="square" checked>Square pixels</label>
-          <div class="row pair" id="cellYRow" hidden><span>Height</span><input type="range" id="cellYr" min="2" max="64" step="0.1" value="16" aria-label="Cell Y slider"><input type="number" id="cellY" min="2" step="0.1" value="16" aria-label="Cell Y in px"></div>
-          <label class="check"><input type="checkbox" id="snap" checked>Snap lines to the edges in the image</label>
-          <div class="row pair"><span>Shift X</span><input type="range" id="offXr" min="0" max="16" step="0.5" value="0" aria-label="Offset X slider"><input type="number" id="offX" min="0" step="0.5" value="0" aria-label="Offset X in px"></div>
-          <div class="row pair"><span>Shift Y</span><input type="range" id="offYr" min="0" max="16" step="0.5" value="0" aria-label="Offset Y slider"><input type="number" id="offY" min="0" step="0.5" value="0" aria-label="Offset Y in px"></div>
-          <p class="hint">Sizes are in pixels of the original. Turn snapping off to place the lines yourself with Shift.</p>
-        </div>
-        <div class="box" id="exactBox" hidden>
-          <div class="row"><input type="number" id="fw" min="1" value="64" aria-label="Width"><span>×</span><input type="number" id="fh" min="1" value="64" aria-label="Height"><span>px</span></div>
-          <p class="hint">Use this when you already know the size the art should have.</p>
-        </div>
-        <label class="check"><input type="checkbox" id="showGrid" checked>Show the lines on the original</label>
-        <details class="more">
-          <summary>Advanced</summary>
-          <div class="row"><span>Min alpha</span><input type="range" id="alpha" min="0" max="255" step="1" value="128"><output id="alphaOut">128</output></div>
-          <p class="hint">Pixels more transparent than this become fully transparent.</p>
-        </details>
-      </section>
+      <!-- @include pixelize/2-pixels.html -->
 
-      <!-- 3 · Colors -->
-      <section class="step-panel" data-panel="colors" hidden>
-        <h2>Pick the colors</h2>
-        <p>AI images have dozens of almost equal shades. This merges them into a clean palette.</p>
-        <div class="seg" role="radiogroup" aria-label="Palette mode">
-          <label><input type="radio" name="palMode" id="palAuto" value="auto" checked>Auto</label>
-          <label><input type="radio" name="palMode" id="palFixed" value="fixed">Fixed count</label>
-          <label><input type="radio" name="palMode" id="palImported" value="imported">My palette</label>
-        </div>
-        <div class="row" id="tolRow"><span>Merge</span><input type="range" id="tol" min="2" max="30" step="1" value="10" aria-label="Tolerance"><output id="tolOut">10</output></div>
-        <div class="row" id="colorsRow" hidden><span>Colors</span><input type="number" id="colors" min="2" max="256" value="16"></div>
-        <div class="box" id="importBox" hidden>
-          <div class="btns">
-            <button type="button" class="ghost small" id="palFileBtn">Load palette file</button>
-            <button type="button" class="ghost small" id="useResultPal">Use the current colors</button>
-          </div>
-          <input type="file" id="palFile" accept="image/*,.hex,.gpl,.txt,.pal" hidden>
-          <div class="row"><input type="text" id="palText" placeholder="#1b1530 #5a5470 …" aria-label="Paste hex codes"><button type="button" class="ghost small" id="palApply">Apply</button></div>
-          <div class="mini-swatches" id="importSwatches"></div>
-          <p class="hint" id="importInfo">Load a PNG, .hex or .gpl palette (Lospec exports work), or paste hex codes. Every pixel snaps to the nearest color.</p>
-        </div>
-        <p class="hint" id="palHint">Move it right to merge more shades and get fewer colors.</p>
-        <label class="check"><input type="checkbox" id="clean">Remove stray noise pixels</label>
-        <div class="row" id="cleanRow" hidden><span>Strength</span><input type="range" id="cleanStr" min="2" max="40" step="1" value="15"><output id="cleanOut">15</output></div>
-        <p class="hint">Click a color under the image to lock it, replace it or merge it into another one.</p>
-      </section>
+      <!-- @include pixelize/3-colors.html -->
 
-      <!-- 4 · Background & crop -->
-      <section class="step-panel" data-panel="clean" hidden>
-        <h2>Background and crop</h2>
-        <div class="sub">
-          <label class="check strong"><input type="checkbox" id="removeBg">Make the background transparent</label>
-          <div class="box" id="bgBox">
-            <div class="row bgrow">
-              <span class="bgchip"><i id="bgSwatch"></i><code id="bgHex">–</code></span>
-              <button type="button" class="ghost small" id="bgAuto">Auto</button>
-            </div>
-            <button type="button" class="tool wide" data-tool="bg">Pick the background on the image</button>
-            <div class="seg" role="radiogroup" id="bgModeRow" aria-label="Background removal mode">
-              <label><input type="radio" name="bgMode" id="bgEdge" value="edge" checked>Only around the art</label>
-              <label><input type="radio" name="bgMode" id="bgAll" value="all">Everywhere</label>
-            </div>
-            <div class="row"><span>Similar shades</span><input type="range" id="bgTol" min="0" max="30" step="1" value="6" aria-label="Background tolerance"><output id="bgTolOut">6</output></div>
-            <p class="hint">"Only around the art" keeps the same color inside the sprite (eyes, highlights).</p>
-          </div>
-        </div>
-        <div class="sub">
-          <span class="label">Crop</span>
-          <div class="seg" role="radiogroup" aria-label="Crop mode">
-            <label><input type="radio" name="cropMode" id="cropOff" value="off" checked>None</label>
-            <label><input type="radio" name="cropMode" id="cropTrim" value="trim">Trim empty</label>
-            <label><input type="radio" name="cropMode" id="cropManual" value="manual">Manual</label>
-          </div>
-          <div class="box" id="trimBox" hidden>
-            <div class="row"><span>Keep a margin of</span><input type="number" id="cropPad" min="0" value="0" aria-label="Margin in px"><span>px</span></div>
-            <p class="hint">Cuts the empty rows and columns around the art.</p>
-          </div>
-          <div class="box" id="manualCropBox" hidden>
-            <div class="margins">
-              <label>Top<input type="number" id="cropT" min="0" value="0"></label>
-              <label>Left<input type="number" id="cropL" min="0" value="0"></label>
-              <label>Right<input type="number" id="cropR" min="0" value="0"></label>
-              <label>Bottom<input type="number" id="cropB" min="0" value="0"></label>
-            </div>
-            <p class="hint">Pixels to cut from each side.</p>
-          </div>
-          <p class="crop-info" id="cropInfo"></p>
-        </div>
-      </section>
+      <!-- @include pixelize/4-background.html -->
 
-      <!-- 5 · Touch up -->
-      <section class="step-panel" data-panel="edit" hidden>
-        <h2>Touch up pixels</h2>
-        <p>Fix single pixels by hand. You can skip this.</p>
-        <div class="toolgrid" role="toolbar" aria-label="Editing tools">
-          <button type="button" class="tool" data-tool="pan" title="Move the view (H, or hold Space)">Move <kbd>H</kbd></button>
-          <button type="button" class="tool" data-tool="pencil" title="Pencil (B)">Pencil <kbd>B</kbd></button>
-          <button type="button" class="tool" data-tool="eraser" title="Eraser (E)">Eraser <kbd>E</kbd></button>
-          <button type="button" class="tool" data-tool="fill" title="Fill an area of one color (G)">Fill <kbd>G</kbd></button>
-          <button type="button" class="tool" data-tool="picker" title="Take a color from the image (I)">Eyedropper <kbd>I</kbd></button>
-        </div>
-        <label class="colorpick">Color <input type="color" id="drawColor" value="#1b1530" aria-label="Drawing color"><code id="drawHex">#1b1530</code></label>
-        <div class="btns">
-          <button type="button" class="ghost small" id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
-          <button type="button" class="ghost small" id="redoBtn" title="Redo (Ctrl+Y)">Redo</button>
-          <button type="button" class="ghost small" id="clearEdits">Clear edits</button>
-        </div>
-        <p class="hint" id="editInfo">No pixel edits</p>
-        <p class="hint">Click a color in the palette below the image to draw with it. Edits are lost if the size of the result changes, so finish the earlier steps first.</p>
-      </section>
+      <!-- @include pixelize/5-touch-up.html -->
 
-      <!-- 6 · Animation -->
-      <section class="step-panel" data-panel="frames" hidden>
-        <h2>Animation</h2>
-        <label class="check strong"><input type="checkbox" id="animOn" checked>This image has several frames</label>
-        <p class="hint" id="animOffHint">Turn it on for spritesheets to split, align and play the frames. Single images can skip this step.</p>
-        <div class="box" id="animOpts">
-          <span class="label">Split into frames</span>
-          <div class="seg" role="radiogroup" aria-label="Split mode">
-            <label><input type="radio" name="splitMode" id="splitAuto" value="auto" checked>Auto</label>
-            <label><input type="radio" name="splitMode" id="splitGrid" value="grid">Grid</label>
-          </div>
-          <div class="row" id="gridRow" hidden>
-            <span>Columns</span><input type="number" id="cols" min="1" value="4">
-            <span>Rows</span><input type="number" id="rows" min="1" value="1">
-          </div>
-          <div class="box" id="autoRows">
-            <div class="row"><span>Min gap</span><input type="number" id="minGap" min="1" value="1"><span>px</span></div>
-            <div class="seg" role="radiogroup" aria-label="Frame alignment">
-              <label><input type="radio" name="align" id="alignBottom" value="bottom" checked>Align feet</label>
-              <label><input type="radio" name="align" id="alignCenter" value="center">Center</label>
-            </div>
-          </div>
-          <p class="hint" id="splitHint">Finds each frame by the empty space around it.</p>
+      <!-- @include pixelize/6-animation.html -->
 
-          <span class="label">Playback</span>
-          <div class="row"><span>Speed</span><input type="range" id="fps" min="1" max="30" step="1" value="8" aria-label="Frames per second"><output id="fpsOut">8</output><span>fps</span></div>
-          <div class="seg" role="radiogroup" aria-label="Direction">
-            <label><input type="radio" name="dir" id="dirFwd" value="forward" checked>Forward</label>
-            <label><input type="radio" name="dir" id="dirRev" value="reverse">Reverse</label>
-            <label><input type="radio" name="dir" id="dirPing" value="pingpong">Ping-pong</label>
-          </div>
-          <div class="seg" role="radiogroup" aria-label="At the end">
-            <label><input type="radio" name="endMode" id="endLoop" value="loop" checked>Loop</label>
-            <label><input type="radio" name="endMode" id="endOnce" value="once">Play once</label>
-          </div>
-          <label class="check"><input type="checkbox" id="onion">Onion skin on the preview</label>
-        </div>
-      </section>
-
-      <!-- 7 · Export -->
-      <section class="step-panel" data-panel="export" hidden>
-        <h2>Export</h2>
-        <div class="sub">
-          <span class="label">Image</span>
-          <div class="row"><span>Scale</span><input type="number" id="scale" min="1" max="64" value="8" aria-label="Download scale"><span>×</span></div>
-          <div class="btns">
-            <button type="button" id="dl1">PNG 1×</button>
-            <button type="button" id="dlN" class="ghost">PNG ×8</button>
-          </div>
-          <p class="hint">1× is the real pixel art. The scaled copy is for sharing.</p>
-          <button type="button" class="ghost" id="toSprite">Edit in the sprite editor</button>
-        </div>
-        <div class="sub" id="animExport">
-          <span class="label">Animation</span>
-          <button type="button" id="dlStrip">Strip PNG for GameMaker</button>
-          <p class="hint">Saved as <code>_stripN.png</code>, which GameMaker splits into frames on import.</p>
-          <div class="row"><span>GIF scale</span><input type="number" id="gifScale" min="1" max="32" value="4"><button type="button" class="ghost small" id="dlGif" style="flex:1">GIF</button></div>
-          <details class="more">
-            <summary>More formats</summary>
-            <div class="row"><span>Columns</span><input type="number" id="sheetCols" min="0" value="0" aria-label="Sheet columns, 0 for auto"><span>Padding</span><input type="number" id="sheetPad" min="0" value="0" aria-label="Sheet padding in px"></div>
-            <button type="button" class="ghost" id="dlSheet">Sheet PNG</button>
-            <button type="button" class="ghost" id="dlZip">Frames ZIP</button>
-            <label class="check"><input type="checkbox" id="repeatHolds" checked>Repeat frames by their duration</label>
-            <p class="hint">Columns 0 makes a square-ish sheet.</p>
-          </details>
-        </div>
-        <details class="more sub">
-          <summary>Batch: several images at once</summary>
-          <p class="hint">Processes more images with these settings into one .zip. Pixel edits are not applied.</p>
-          <label class="check"><input type="checkbox" id="batchPalette">Snap them all to this palette</label>
-          <button type="button" class="ghost" id="batchBtn">Choose images…</button>
-          <input type="file" id="batchFiles" accept="image/*" multiple hidden>
-          <p class="status" id="batchStatus" role="status"></p>
-        </details>
-        <div class="sub">
-          <p class="hint">Settings are remembered in this browser.</p>
-          <button type="button" class="ghost small" id="resetSettings">Reset all settings</button>
-        </div>
-      </section>
+      <!-- @include pixelize/7-export.html -->
 
       <div class="stepnav">
         <button type="button" class="ghost" id="backBtn">Back</button>
@@ -257,326 +38,33 @@
       <p class="status" id="status" role="status"></p>
     </aside>
 
-    <section class="work">
-      <div class="welcome" data-show="image">
-        <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose an image">
-          <strong>Drop an image here</strong>
-          <small>or click to choose one</small>
-        </div>
-        <input type="file" id="file" accept="image/*" hidden>
-      </div>
-
-      <div class="stats" data-show="grid colors clean edit frames export">
-        <div class="stat"><span>Original</span><b id="stIn">–</b></div>
-        <div class="stat"><span>Fake pixel<span id="stConf"></span></span><b id="stCell">–</b></div>
-        <div class="stat"><span>Real size</span><b id="stOut">–</b></div>
-        <div class="stat"><span>Colors</span><b id="stPal">–</b></div>
-      </div>
-      <div class="warnbar" id="confWarn" data-show="grid" hidden>
-        <p>The grid detection is unsure about this image. Check the lines on the original, or set the pixel size yourself.</p>
-        <button type="button" class="ghost small" id="warnManual">Adjust manually</button>
-      </div>
-
-      <div class="views" data-show="grid colors clean edit export">
-        <figure class="panel" data-show="grid">
-          <figcaption><span class="label">Original</span><span class="tag" id="srcTag"></span></figcaption>
-          <div class="stage"><canvas id="srcCanvas"></canvas></div>
-        </figure>
-        <figure class="panel">
-          <figcaption><span class="label">Result</span><span class="tag" id="resTag"></span></figcaption>
-          <div class="stage edit-stage pan" id="editStage"><canvas id="editCanvas" aria-label="Result"></canvas></div>
-          <div class="toolbar">
-            <div class="group">
-              <button type="button" class="ghost small" id="zoomOutBtn" title="Zoom out (−)" aria-label="Zoom out">−</button>
-              <output id="zoomLabel">100%</output>
-              <button type="button" class="ghost small" id="zoomInBtn" title="Zoom in (+)" aria-label="Zoom in">+</button>
-              <button type="button" class="ghost small" id="fitBtn" title="Fit (0)">Fit</button>
-              <label class="check"><input type="checkbox" id="pixGrid" checked>Grid</label>
-            </div>
-            <div class="group compare" data-show="colors clean edit">
-              <label class="check"><input type="checkbox" id="compare">Compare</label>
-              <input type="range" id="split" min="0" max="100" value="50" aria-label="Before and after split" disabled>
-            </div>
-          </div>
-        </figure>
-      </div>
-
-      <div class="panel" data-show="colors edit">
-        <div class="pal-head">
-          <span class="label">Palette · click a color</span>
-          <div class="group">
-            <button type="button" class="ghost small" id="copyAllHex">Copy all hex</button>
-            <button type="button" class="ghost small" id="palReset" hidden>Undo color changes</button>
-          </div>
-        </div>
-        <div class="swatches" id="swatches"></div>
-        <div class="sw-editor" id="swEditor" hidden>
-          <span class="sw-info" id="swInfo"></span>
-          <button type="button" class="ghost small" id="swCopy">Copy hex</button>
-          <button type="button" class="ghost small" id="swLock" title="Locked colors stay when you change the settings">Lock</button>
-          <label class="colorpick">Replace with <input type="color" id="swReplace" aria-label="Replacement color"></label>
-          <button type="button" class="ghost small" id="swMerge">Merge into…</button>
-        </div>
-      </div>
-
-      <div class="anim" data-show="frames">
-        <div class="panel anim-off" id="animOff">
-          <p>Animation is off. Turn on <b>This image has several frames</b> on the left if this is a spritesheet, or go on to export.</p>
-        </div>
-        <div class="anim-body" id="animBody">
-          <figure class="panel">
-            <figcaption><span class="label">Preview</span><span class="tag" id="animInfo"></span></figcaption>
-            <div class="stage anim-stage"><canvas id="animCanvas"></canvas></div>
-            <div class="toolbar">
-              <button type="button" class="ghost small" id="playBtn">Pause</button>
-              <span class="frame-info" id="frameInfo"></span>
-            </div>
-          </figure>
-          <figure class="panel">
-            <figcaption><span class="label">Align frame</span><span class="tag" id="alignTag"></span></figcaption>
-            <div class="stage align-stage" id="alignStage"><canvas id="alignCanvas" tabindex="0" aria-label="Selected frame. Drag it or use the arrow keys to move it."></canvas></div>
-            <div class="toolbar">
-              <div class="group">
-                <button type="button" class="ghost small" id="nudgeL" aria-label="Move left">←</button>
-                <button type="button" class="ghost small" id="nudgeU" aria-label="Move up">↑</button>
-                <button type="button" class="ghost small" id="nudgeD" aria-label="Move down">↓</button>
-                <button type="button" class="ghost small" id="nudgeR" aria-label="Move right">→</button>
-                <output id="nudgeVal">0, 0</output>
-                <button type="button" class="ghost small" id="nudgeReset">Reset</button>
-              </div>
-              <div class="group">
-                <span class="muted">Ghost</span>
-                <div class="seg small" role="radiogroup" aria-label="Ghost frame">
-                  <label><input type="radio" name="ghost" value="prev" checked>Previous</label>
-                  <label><input type="radio" name="ghost" value="first">First</label>
-                  <label><input type="radio" name="ghost" value="none">None</label>
-                </div>
-              </div>
-            </div>
-            <p class="hint">Drag the frame or use the arrow keys to move it 1 px. The faint frame behind it and the center lines help you line it up.</p>
-          </figure>
-          <div class="panel frames-panel">
-            <div class="frames" id="frames"></div>
-            <div class="row sel-row">
-              <button type="button" class="ghost small" id="moveL" aria-label="Move frame earlier">◀ Earlier</button>
-              <button type="button" class="ghost small" id="moveR" aria-label="Move frame later">Later ▶</button>
-              <button type="button" class="ghost small" id="selToggle">Exclude</button>
-              <span class="muted">Duration</span>
-              <button type="button" class="ghost small" id="holdMinus" aria-label="Shorter">−</button>
-              <output id="holdVal">1×</output>
-              <button type="button" class="ghost small" id="holdPlus" aria-label="Longer">+</button>
-              <button type="button" class="ghost small" id="resetAllOffsets">Reset all positions</button>
-            </div>
-            <p class="hint">Click a frame to align it. Drag frames to reorder them. × takes a frame out of the animation.</p>
-          </div>
-        </div>
-      </div>
-    </section>
+    <!-- @include pixelize/workspace.html -->
   </div>
   </div>
 
   <!-- ===== Sprite editor ===== -->
   <div id="spriteMode" class="sprite" hidden>
-    <div class="sp-bar panel">
-      <div class="group">
-        <button type="button" class="ghost small" id="spOpen" title="Open a PNG, a _stripN.png strip or a .pixelize file">Open…</button>
-        <input type="file" id="spFile" accept="image/*,.pixelize,.json" hidden>
-        <button type="button" class="ghost small" id="spSave" title="Save layers and frames as a .pixelize file">Save project</button>
-      </div>
-      <div class="group">
-        <input type="number" id="spW" min="1" max="2048" value="32" aria-label="Width"><span class="muted">×</span><input type="number" id="spH" min="1" max="2048" value="32" aria-label="Height">
-        <button type="button" class="ghost small" id="spNew" title="Start a blank sprite of this size">New</button>
-        <button type="button" class="ghost small" id="spResize" title="Change the canvas size, keeping the art centered">Resize canvas</button>
-      </div>
-      <div class="group">
-        <button type="button" class="ghost small" id="spUndo" title="Undo (Ctrl+Z)">Undo</button>
-        <button type="button" class="ghost small" id="spRedo" title="Redo (Ctrl+Y)">Redo</button>
-      </div>
-      <div class="group sp-export">
-        <span class="muted">Export</span>
-        <input type="number" id="spScale" min="1" max="64" value="1" aria-label="Export scale" title="Scale"><span class="muted">×</span>
-        <button type="button" class="small" id="spExportPng" title="The current frame">PNG</button>
-        <button type="button" class="small" id="spExportStrip" title="All frames side by side, named _stripN.png for GameMaker">Strip</button>
-        <button type="button" class="small" id="spExportGif">GIF</button>
-      </div>
-      <p class="status" id="spStatus" role="status"></p>
-    </div>
+    <!-- @include sprite/top-bar.html -->
 
     <div class="sp-main">
-      <div class="sp-tools panel" role="toolbar" aria-label="Tools" aria-orientation="vertical">
-        <button type="button" class="tool sp-tool" data-sptool="pencil" aria-label="Pencil" title="Pencil (B)&#10;Right click: secondary color. Shift+click: straight line. Alt+click: pick a color.">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.2-4.6L15.6 5a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z"/><path d="M14 6.6l3.4 3.4"/></svg><kbd>B</kbd>
-        </button>
-        <button type="button" class="tool sp-tool" data-sptool="eraser" aria-label="Eraser" title="Eraser (E)">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20l-6-6a1.5 1.5 0 0 1 0-2.1L12.9 3a1.5 1.5 0 0 1 2.1 0L21 9a1.5 1.5 0 0 1 0 2.1L12 20z"/><path d="M8 9l7 7"/><path d="M12 20h8"/></svg><kbd>E</kbd>
-        </button>
-        <button type="button" class="tool sp-tool" data-sptool="bucket" aria-label="Paint bucket" title="Paint bucket (G)">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.5L11 4l7.5 7.5L11 19z"/><path d="M3.5 11.5h15"/><path d="M8 3l3 1"/><path d="M20.5 15.5s1.5 2 1.5 3a1.5 1.5 0 0 1-3 0c0-1 1.5-3 1.5-3z"/></svg><kbd>G</kbd>
-        </button>
-        <button type="button" class="tool sp-tool" data-sptool="rect" aria-label="Rectangle" title="Rectangle (U)&#10;Shift: square.">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="1"/></svg><kbd>U</kbd>
-        </button>
-        <button type="button" class="tool sp-tool" data-sptool="ellipse" aria-label="Ellipse" title="Ellipse (O)&#10;Shift: circle.">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="8.5" ry="7"/></svg><kbd>O</kbd>
-        </button>
-        <button type="button" class="tool sp-tool" data-sptool="picker" aria-label="Eyedropper" title="Eyedropper (I)&#10;Right click: sets the secondary color.">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 6.5l4 4"/><path d="M16 4.5a2.1 2.1 0 0 1 3 0l.5.5a2.1 2.1 0 0 1 0 3L17.5 10l-4-4z"/><path d="M14.5 8.5L6 17v3h3l8.5-8.5"/></svg><kbd>I</kbd>
-        </button>
-        <hr>
-        <button type="button" class="tool sp-tool" data-sptool="select" aria-label="Select" title="Select a rectangle (M)&#10;Shift adds, Alt subtracts. Drag inside to move, drag the squares to resize.">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" /><path d="M11 4h2M11 20h2M4 11v2M20 11v2"/></svg><kbd>M</kbd>
-        </button>
-        <button type="button" class="tool sp-tool" data-sptool="wand" aria-label="Select by color" title="Select by color (W)&#10;Shift adds, Alt subtracts.">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20L14 10"/><path d="M12.5 8.5l3 3"/><path d="M17 3v3M15.5 4.5h3"/><path d="M20 9v2M19 10h2"/><path d="M9.5 3.5v2M8.5 4.5h2"/></svg><kbd>W</kbd>
-        </button>
-        <button type="button" class="tool sp-tool" data-sptool="move" aria-label="Move" title="Move the selection, or the whole layer when nothing is selected (V)">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18"/><path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg><kbd>V</kbd>
-        </button>
-        <button type="button" class="tool sp-tool" data-sptool="canvas" aria-label="Canvas size" title="Canvas size (C)&#10;Drag the squares on the edges of the paper.">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg><kbd>C</kbd>
-        </button>
-        <button type="button" class="tool sp-tool" data-sptool="pan" aria-label="Hand" title="Move the view (H, or hold Space)">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M11 10.5V4a1.5 1.5 0 0 1 3 0v7"/><path d="M14 10.5V6a1.5 1.5 0 0 1 3 0v7.5A6.5 6.5 0 0 1 10.5 20h-.3a6 6 0 0 1-5-2.7l-2.4-3.7a1.5 1.5 0 0 1 2.4-1.8L8 14"/></svg><kbd>H</kbd>
-        </button>
-      </div>
+      <!-- @include sprite/tools.html -->
 
       <div class="sp-center">
-        <div class="sp-options panel">
-          <div class="group" data-for="pencil eraser rect ellipse">
-            <span class="muted">Brush</span>
-            <input type="range" id="spBrushR" min="1" max="16" value="1" aria-label="Brush size slider">
-            <input type="number" id="spBrush" min="1" max="32" value="1" aria-label="Brush size in pixels"><span class="muted">px <kbd>[</kbd> <kbd>]</kbd></span>
-          </div>
-          <div class="seg small" role="radiogroup" aria-label="Shape" data-for="rect ellipse">
-            <label><input type="radio" name="spRectMode" value="outline" checked>Outline</label>
-            <label><input type="radio" name="spRectMode" value="filled">Filled</label>
-          </div>
-          <div class="seg small" role="radiogroup" aria-label="Bucket" data-for="bucket">
-            <label title="Fill the connected area"><input type="radio" name="spBucketMode" value="fill" checked>Fill area</label>
-            <label title="Repaint every pixel of the clicked color on this layer"><input type="radio" name="spBucketMode" value="replace">Replace color</label>
-          </div>
-          <span data-for="bucket"><label class="check" id="spAllFramesRow"><input type="checkbox" id="spAllFrames">In every frame</label></span>
-          <label class="check" data-for="wand"><input type="checkbox" id="spContig" checked>Only connected pixels</label>
-          <span class="hint" data-for="rect ellipse">Shift: square or circle. Right click: secondary color.</span>
-          <div class="seg small" role="radiogroup" aria-label="When the canvas changes size" data-for="canvas">
-            <label title="The art keeps its size; space is added or cut around it"><input type="radio" name="spCanvasMode" value="keep" checked>Keep pixel size</label>
-            <label title="The art stretches with the paper"><input type="radio" name="spCanvasMode" value="stretch">Stretch art</label>
-          </div>
-          <span class="hint" data-for="canvas">Drag the orange squares on the edges of the paper. Drag elsewhere to move the view.</span>
-          <span class="hint" data-for="select wand">Shift adds, Alt subtracts. Drag inside the selection to move it, or its squares to resize it.</span>
-          <span class="hint" data-for="move">Drag to move the selection, or the whole layer if nothing is selected. Arrow keys move 1 px.</span>
-          <span class="hint" data-for="picker">Left click: primary color. Right click: secondary.</span>
-          <span class="hint" data-for="pan">Drag to move the view. Scroll to zoom.</span>
-          <div class="group sp-sel" id="spSelActions" hidden>
-            <span class="tag" id="spSelInfo"></span>
-            <button type="button" class="ghost small" id="spGrow" title="Make it twice as big">×2</button>
-            <button type="button" class="ghost small" id="spShrink" title="Make it half as big">½</button>
-            <button type="button" class="ghost small" id="spFlipH" title="Flip horizontally">Flip ↔</button>
-            <button type="button" class="ghost small" id="spFlipV" title="Flip vertically">Flip ↕</button>
-            <button type="button" class="ghost small" id="spCopy" title="Copy (Ctrl+C)">Copy</button>
-            <button type="button" class="ghost small" id="spCut" title="Cut (Ctrl+X)">Cut</button>
-            <button type="button" class="ghost small" id="spSelDelete" title="Delete">Delete</button>
-            <button type="button" class="ghost small" id="spApply" title="Put the moved pixels down (Enter)">Apply</button>
-            <button type="button" class="ghost small" id="spDeselect" title="Deselect (Ctrl+D or Esc)">Deselect</button>
-          </div>
-          <button type="button" class="ghost small sp-selall" id="spSelAll" title="Select all (Ctrl+A)">Select all</button>
-        </div>
+        <!-- @include sprite/tool-options.html -->
 
-        <div class="panel sp-canvas-panel">
-          <div class="sp-stage" id="spStage"><canvas id="spCanvas" tabindex="0" aria-label="Sprite canvas"></canvas></div>
-          <div class="toolbar">
-            <div class="group">
-              <button type="button" class="ghost small" id="spZoomOut" title="Zoom out (−)" aria-label="Zoom out">−</button>
-              <output id="spZoom">800%</output>
-              <button type="button" class="ghost small" id="spZoomIn" title="Zoom in (+)" aria-label="Zoom in">+</button>
-              <button type="button" class="ghost small" id="spFit" title="Fit (0)">Fit</button>
-              <label class="check"><input type="checkbox" id="spGrid" checked>Grid</label>
-              <input type="number" id="spGridW" min="1" max="512" value="1" aria-label="Grid cell width" title="Grid cell size in pixels (1 = every pixel)"><span class="muted">×</span><input type="number" id="spGridH" min="1" max="512" value="1" aria-label="Grid cell height" title="Grid cell size in pixels (1 = every pixel)">
-              <label class="check"><input type="checkbox" id="spOnion">Onion skin</label>
-            </div>
-            <div class="group" role="group" aria-label="Paper">
-              <span class="muted">Paper</span>
-              <div class="seg small" role="radiogroup" aria-label="Paper background">
-                <label><input type="radio" name="spPaper" value="checker" checked>Checker</label>
-                <label><input type="radio" name="spPaper" value="color">Color</label>
-              </div>
-              <button type="button" class="sp-slot" id="spPaperColor" aria-label="Paper color"></button>
-            </div>
-            <code class="muted" id="spPos"></code>
-          </div>
-        </div>
+        <!-- @include sprite/canvas.html -->
       </div>
 
       <aside class="sp-side">
-        <div class="panel sp-color">
-          <div class="sp-slots">
-            <button type="button" class="sp-slot" id="spPrimary" aria-label="Primary color"></button>
-            <button type="button" class="sp-slot" id="spSecondary" aria-label="Secondary color"></button>
-            <button type="button" class="ghost small" id="spSwap" title="Swap colors (X)">⇄</button>
-            <button type="button" class="ghost small" id="spClearColor" title="Make this color transparent (draws like an eraser)">Clear</button>
-            <span class="tag" id="spEditing"></span>
-            <input type="text" id="spHex" maxlength="7" aria-label="Hex color" spellcheck="false">
-          </div>
-          <canvas id="spSV" width="240" height="140" aria-label="Saturation and brightness"></canvas>
-          <canvas id="spHue" width="240" height="14" aria-label="Hue"></canvas>
-        </div>
+        <!-- @include sprite/color.html -->
 
-        <div class="panel sp-palettes">
-          <div class="pal-head"><span class="label">In this sprite · <span id="spUsedCount">0</span></span></div>
-          <div class="sp-swatches" id="spUsed"></div>
-          <p class="hint" id="spUsedEmpty">The colors you draw with show up here.</p>
-          <div class="pal-head sp-pal-head">
-            <span class="label" title="Click: primary. Right click: secondary. Ctrl+click removes a color.">My palette</span>
-            <div class="group">
-              <button type="button" class="ghost small" id="spPalAdd" title="Add the primary color">+ Add</button>
-              <button type="button" class="ghost small" id="spPalUsed" title="Add every color of the sprite">+ Sprite</button>
-              <button type="button" class="ghost small" id="spPalImport" title="Load a .hex, .gpl or PNG palette">Load</button>
-              <button type="button" class="ghost small" id="spPalClear" title="Remove every color">Clear</button>
-            </div>
-          </div>
-          <input type="file" id="spPalFile" accept="image/*,.hex,.gpl,.txt,.pal" hidden>
-          <div class="sp-swatches" id="spPal"></div>
-          <p class="hint" id="spPalEmpty">Empty. Add colors or load a Lospec palette.</p>
-        </div>
+        <!-- @include sprite/palettes.html -->
 
-        <div class="panel sp-layers-panel">
-          <div class="pal-head">
-            <span class="label">Layers</span>
-            <div class="group">
-              <button type="button" class="ghost small" id="spLayerAdd" title="New layer">+</button>
-              <button type="button" class="ghost small" id="spLayerDup" title="Duplicate layer">Dup</button>
-              <button type="button" class="ghost small" id="spLayerUp" title="Move up" aria-label="Move layer up">↑</button>
-              <button type="button" class="ghost small" id="spLayerDown" title="Move down" aria-label="Move layer down">↓</button>
-              <button type="button" class="ghost small" id="spLayerMerge" title="Merge into the layer below">Merge</button>
-              <button type="button" class="ghost small" id="spLayerDel" title="Delete layer" aria-label="Delete layer">×</button>
-            </div>
-          </div>
-          <div class="sp-layers" id="spLayers"></div>
-          <div class="row"><span>Opacity</span><input type="range" id="spOpacity" min="0" max="100" value="100" aria-label="Layer opacity"><output id="spOpacityOut">100%</output></div>
-        </div>
+        <!-- @include sprite/layers.html -->
       </aside>
     </div>
 
-    <div class="panel sp-timeline">
-      <div class="sp-preview">
-        <div class="stage"><canvas id="spPreview" width="32" height="32" aria-label="Animation preview"></canvas></div>
-        <button type="button" class="ghost small" id="spPlay" title="Play or pause (P)">Play</button>
-      </div>
-      <div class="sp-frames-col">
-        <div class="frames sp-frames" id="spFrames" title="Drag frames to reorder them. , and . go to the previous and next frame, P plays."></div>
-        <div class="row sel-row">
-          <span class="frame-info" id="spFrameInfo"></span>
-          <button type="button" class="ghost small" id="spFrameAdd" title="New empty frame">+ Frame</button>
-          <button type="button" class="ghost small" id="spFrameDup" title="Copy of this frame">Duplicate</button>
-          <button type="button" class="ghost small" id="spFrameLeft" aria-label="Move frame earlier">◀</button>
-          <button type="button" class="ghost small" id="spFrameRight" aria-label="Move frame later">▶</button>
-          <button type="button" class="ghost small" id="spFrameDel" title="Delete this frame">Delete</button>
-          <span class="muted">Duration</span>
-          <input type="number" id="spDuration" min="10" max="10000" step="10" value="100" aria-label="Frame duration in ms"><span class="muted">ms</span>
-          <button type="button" class="ghost small" id="spDurationAll" title="Give every frame this duration">All</button>
-        </div>
-      </div>
-    </div>
+    <!-- @include sprite/timeline.html -->
   </div>
 </div>
 <script type="module" src="/src/main.ts"></script>

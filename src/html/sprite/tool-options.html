@@ -1,0 +1,40 @@
+<div class="sp-options panel">
+  <div class="group" data-for="pencil eraser rect ellipse">
+    <span class="muted">Brush</span>
+    <input type="range" id="spBrushR" min="1" max="16" value="1" aria-label="Brush size slider">
+    <input type="number" id="spBrush" min="1" max="32" value="1" aria-label="Brush size in pixels"><span class="muted">px <kbd>[</kbd> <kbd>]</kbd></span>
+  </div>
+  <div class="seg small" role="radiogroup" aria-label="Shape" data-for="rect ellipse">
+    <label><input type="radio" name="spRectMode" value="outline" checked>Outline</label>
+    <label><input type="radio" name="spRectMode" value="filled">Filled</label>
+  </div>
+  <div class="seg small" role="radiogroup" aria-label="Bucket" data-for="bucket">
+    <label title="Fill the connected area"><input type="radio" name="spBucketMode" value="fill" checked>Fill area</label>
+    <label title="Repaint every pixel of the clicked color on this layer"><input type="radio" name="spBucketMode" value="replace">Replace color</label>
+  </div>
+  <span data-for="bucket"><label class="check" id="spAllFramesRow"><input type="checkbox" id="spAllFrames">In every frame</label></span>
+  <label class="check" data-for="wand"><input type="checkbox" id="spContig" checked>Only connected pixels</label>
+  <span class="hint" data-for="rect ellipse">Shift: square or circle. Right click: secondary color.</span>
+  <div class="seg small" role="radiogroup" aria-label="When the canvas changes size" data-for="canvas">
+    <label title="The art keeps its size; space is added or cut around it"><input type="radio" name="spCanvasMode" value="keep" checked>Keep pixel size</label>
+    <label title="The art stretches with the paper"><input type="radio" name="spCanvasMode" value="stretch">Stretch art</label>
+  </div>
+  <span class="hint" data-for="canvas">Drag the orange squares on the edges of the paper. Drag elsewhere to move the view.</span>
+  <span class="hint" data-for="select wand">Shift adds, Alt subtracts. Drag inside the selection to move it, or its squares to resize it.</span>
+  <span class="hint" data-for="move">Drag to move the selection, or the whole layer if nothing is selected. Arrow keys move 1 px.</span>
+  <span class="hint" data-for="picker">Left click: primary color. Right click: secondary.</span>
+  <span class="hint" data-for="pan">Drag to move the view. Scroll to zoom.</span>
+  <div class="group sp-sel" id="spSelActions" hidden>
+    <span class="tag" id="spSelInfo"></span>
+    <button type="button" class="ghost small" id="spGrow" title="Make it twice as big">×2</button>
+    <button type="button" class="ghost small" id="spShrink" title="Make it half as big">½</button>
+    <button type="button" class="ghost small" id="spFlipH" title="Flip horizontally">Flip ↔</button>
+    <button type="button" class="ghost small" id="spFlipV" title="Flip vertically">Flip ↕</button>
+    <button type="button" class="ghost small" id="spCopy" title="Copy (Ctrl+C)">Copy</button>
+    <button type="button" class="ghost small" id="spCut" title="Cut (Ctrl+X)">Cut</button>
+    <button type="button" class="ghost small" id="spSelDelete" title="Delete">Delete</button>
+    <button type="button" class="ghost small" id="spApply" title="Put the moved pixels down (Enter)">Apply</button>
+    <button type="button" class="ghost small" id="spDeselect" title="Deselect (Ctrl+D or Esc)">Deselect</button>
+  </div>
+  <button type="button" class="ghost small sp-selall" id="spSelAll" title="Select all (Ctrl+A)">Select all</button>
+</div>

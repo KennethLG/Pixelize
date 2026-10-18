@@ -1,0 +1,20 @@
+<div class="panel sp-timeline">
+  <div class="sp-preview">
+    <div class="stage"><canvas id="spPreview" width="32" height="32" aria-label="Animation preview"></canvas></div>
+    <button type="button" class="ghost small" id="spPlay" title="Play or pause (P)">Play</button>
+  </div>
+  <div class="sp-frames-col">
+    <div class="frames sp-frames" id="spFrames" title="Drag frames to reorder them. , and . go to the previous and next frame, P plays."></div>
+    <div class="row sel-row">
+      <span class="frame-info" id="spFrameInfo"></span>
+      <button type="button" class="ghost small" id="spFrameAdd" title="New empty frame">+ Frame</button>
+      <button type="button" class="ghost small" id="spFrameDup" title="Copy of this frame">Duplicate</button>
+      <button type="button" class="ghost small" id="spFrameLeft" aria-label="Move frame earlier">◀</button>
+      <button type="button" class="ghost small" id="spFrameRight" aria-label="Move frame later">▶</button>
+      <button type="button" class="ghost small" id="spFrameDel" title="Delete this frame">Delete</button>
+      <span class="muted">Duration</span>
+      <input type="number" id="spDuration" min="10" max="10000" step="10" value="100" aria-label="Frame duration in ms"><span class="muted">ms</span>
+      <button type="button" class="ghost small" id="spDurationAll" title="Give every frame this duration">All</button>
+    </div>
+  </div>
+</div>

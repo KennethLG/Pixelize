@@ -1,0 +1,23 @@
+<div class="panel sp-canvas-panel">
+  <div class="sp-stage" id="spStage"><canvas id="spCanvas" tabindex="0" aria-label="Sprite canvas"></canvas></div>
+  <div class="toolbar">
+    <div class="group">
+      <button type="button" class="ghost small" id="spZoomOut" title="Zoom out (−)" aria-label="Zoom out">−</button>
+      <output id="spZoom">800%</output>
+      <button type="button" class="ghost small" id="spZoomIn" title="Zoom in (+)" aria-label="Zoom in">+</button>
+      <button type="button" class="ghost small" id="spFit" title="Fit (0)">Fit</button>
+      <label class="check"><input type="checkbox" id="spGrid" checked>Grid</label>
+      <input type="number" id="spGridW" min="1" max="512" value="1" aria-label="Grid cell width" title="Grid cell size in pixels (1 = every pixel)"><span class="muted">×</span><input type="number" id="spGridH" min="1" max="512" value="1" aria-label="Grid cell height" title="Grid cell size in pixels (1 = every pixel)">
+      <label class="check"><input type="checkbox" id="spOnion">Onion skin</label>
+    </div>
+    <div class="group" role="group" aria-label="Paper">
+      <span class="muted">Paper</span>
+      <div class="seg small" role="radiogroup" aria-label="Paper background">
+        <label><input type="radio" name="spPaper" value="checker" checked>Checker</label>
+        <label><input type="radio" name="spPaper" value="color">Color</label>
+      </div>
+      <button type="button" class="sp-slot" id="spPaperColor" aria-label="Paper color"></button>
+    </div>
+    <code class="muted" id="spPos"></code>
+  </div>
+</div>

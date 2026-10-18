@@ -1,0 +1,42 @@
+<!-- 4 · Background & crop -->
+<section class="step-panel" data-panel="clean" hidden>
+  <h2>Background and crop</h2>
+  <div class="sub">
+    <label class="check strong"><input type="checkbox" id="removeBg">Make the background transparent</label>
+    <div class="box" id="bgBox">
+      <div class="row bgrow">
+        <span class="bgchip"><i id="bgSwatch"></i><code id="bgHex">–</code></span>
+        <button type="button" class="ghost small" id="bgAuto">Auto</button>
+      </div>
+      <button type="button" class="tool wide" data-tool="bg">Pick the background on the image</button>
+      <div class="seg" role="radiogroup" id="bgModeRow" aria-label="Background removal mode">
+        <label><input type="radio" name="bgMode" id="bgEdge" value="edge" checked>Only around the art</label>
+        <label><input type="radio" name="bgMode" id="bgAll" value="all">Everywhere</label>
+      </div>
+      <div class="row"><span>Similar shades</span><input type="range" id="bgTol" min="0" max="30" step="1" value="6" aria-label="Background tolerance"><output id="bgTolOut">6</output></div>
+      <p class="hint">"Only around the art" keeps the same color inside the sprite (eyes, highlights).</p>
+    </div>
+  </div>
+  <div class="sub">
+    <span class="label">Crop</span>
+    <div class="seg" role="radiogroup" aria-label="Crop mode">
+      <label><input type="radio" name="cropMode" id="cropOff" value="off" checked>None</label>
+      <label><input type="radio" name="cropMode" id="cropTrim" value="trim">Trim empty</label>
+      <label><input type="radio" name="cropMode" id="cropManual" value="manual">Manual</label>
+    </div>
+    <div class="box" id="trimBox" hidden>
+      <div class="row"><span>Keep a margin of</span><input type="number" id="cropPad" min="0" value="0" aria-label="Margin in px"><span>px</span></div>
+      <p class="hint">Cuts the empty rows and columns around the art.</p>
+    </div>
+    <div class="box" id="manualCropBox" hidden>
+      <div class="margins">
+        <label>Top<input type="number" id="cropT" min="0" value="0"></label>
+        <label>Left<input type="number" id="cropL" min="0" value="0"></label>
+        <label>Right<input type="number" id="cropR" min="0" value="0"></label>
+        <label>Bottom<input type="number" id="cropB" min="0" value="0"></label>
+      </div>
+      <p class="hint">Pixels to cut from each side.</p>
+    </div>
+    <p class="crop-info" id="cropInfo"></p>
+  </div>
+</section>
