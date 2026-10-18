@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Turns fake (AI generated) pixel art into real pixel art: grid detection, palette, editor, spritesheet animation and exports",
+  "description": "Turn fake AI pixel art into real pixel art, then draw, animate and polish sprites: grid detection, palettes, a sprite editor with layers, frames and tags, and exports for game engines.",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && node scripts/postbuild.mjs",
@@ -12,7 +12,8 @@
     "cli": "tsx cli/pixelize.ts",
     "image": "node cli/generate-image.mjs",
     "desktop": "npm run build && electron .",
-    "desktop:dist": "npm run build && electron-builder --win"
+    "desktop:dist": "npm run build && electron-builder --win --publish never",
+    "screenshots": "npm run build && electron scripts/screenshots.cjs"
   },
   "dependencies": {
     "react": "^19.3.1",
@@ -62,5 +63,24 @@
     "portable": {
       "artifactName": "${productName}-${version}-portable.exe"
     }
-  }
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/KennethLG/Pixelize#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KennethLG/Pixelize.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KennethLG/Pixelize/issues"
+  },
+  "keywords": [
+    "pixel-art",
+    "sprite-editor",
+    "pixelate",
+    "animation",
+    "gamedev",
+    "spritesheet",
+    "electron",
+    "react"
+  ]
 }

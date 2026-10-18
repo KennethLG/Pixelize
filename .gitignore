@@ -2,3 +2,7 @@ node_modules/
 dist/
 generated/
 release/
+
+# local helper scripts for other projects
+_render*.cjs
+.candy-preview.cjs

@@ -48,7 +48,7 @@ function Ramps(props: { onPick: (rgb: RGB) => void; onSecondary: (rgb: RGB) => v
       <div className="row ramp-opts">
         <span>Steps</span><NumberField value={opts.steps} min={1} max={4} label="Steps on each side" onCommit={(v) => setOpts({ ...opts, steps: Math.round(v) })} live />
         <span>Hue</span><NumberField value={opts.hueShift} min={0} max={45} label="Hue shift per step, in degrees" title="How far shadows turn toward blue and highlights toward yellow" onCommit={(v) => setOpts({ ...opts, hueShift: Math.round(v) })} live />
-        <span>Contrast</span><NumberField value={Math.round(opts.contrast * 100)} min={4} max={30} label="Brightness change per step, in percent" onCommit={(v) => setOpts({ ...opts, contrast: v / 100 })} live />
+        <span title="How much the brightness changes per step">Light</span><NumberField value={Math.round(opts.contrast * 100)} min={4} max={30} label="Brightness change per step, in percent" onCommit={(v) => setOpts({ ...opts, contrast: v / 100 })} live />
       </div>
       {preview.length > 0 ? (
         <div className="ramp" title="From the primary color: darker on the left, lighter on the right">

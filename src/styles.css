@@ -539,7 +539,8 @@ body[data-mode="sprite"] .wrap { max-width: 1800px; }
 .sp-ramps summary { cursor: pointer; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--line); }
 .sp-ramps[open] { display: flex; flex-direction: column; gap: 6px; }
 .ramp-opts { flex-wrap: wrap; gap: 4px 6px; }
-.ramp-opts input[type="number"] { width: 46px; padding: 2px 4px; }
+.ramp-opts span { font-size: 12px; }
+.ramp-opts input[type="number"] { width: 38px; padding: 2px 3px; }
 .ramp { display: flex; gap: 3px; align-items: center; }
 .ramp .sp-sw { width: 22px; flex: none; }
 .ramp.saved .small { padding: 1px 6px; }

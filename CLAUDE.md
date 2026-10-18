@@ -8,6 +8,8 @@ Pixelize converts fake AI pixel art into real pixel art, and has a sprite editor
 - `npm run build`: `tsc`, then Vite bundles everything (CSS, JS and the inline worker) into `dist/pixelize.html`.
 - `npm run cli -- <image> [options]`: the terminal tool (runs `cli/pixelize.ts` with tsx).
 - `npm run desktop` / `npm run desktop:dist`: run the Electron app / build the Windows installer and portable exe into `release/` (git-ignored). `electron/main.cjs` only wraps `dist/desktop/index.html`; keep app logic out of it so the web page and the desktop app stay the same code.
+- `npm run screenshots`: rebuilds and retakes the README images in `docs/screenshots` (`scripts/screenshots.cjs`, a hidden Electron window with a throwaway profile). Run it when the UI changes visibly.
+- Releases: pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the Windows installer and portable exe and attaches them to a GitHub release. CI (`ci.yml`) runs the tests and the build on every push to main and every pull request.
 - `npm run image -- "<prompt>" [options]`: generates images with the OpenAI Images API (`cli/generate-image.mjs`, plain Node, needs `OPENAI_API_KEY`; `--help` lists the options). Output goes to `generated/` (git-ignored) unless `--out` says otherwise.
 
 ## Rules
