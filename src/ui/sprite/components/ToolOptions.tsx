@@ -10,6 +10,7 @@ import { Seg } from '../../components/common';
 
 const HINTS: Partial<Record<typeof sp.tool, string>> = {
   line: 'Shift: straight or 45°. Right click: secondary color.',
+  shade: 'Left click: one step lighter. Right click: one step darker. Steps along your ramps, or My palette in its order.',
   rect: 'Shift: square or circle. Right click: secondary color.',
   ellipse: 'Shift: square or circle. Right click: secondary color.',
   select: 'Shift adds, Alt subtracts. Drag inside the selection to move it, or its squares to resize it.',
@@ -49,7 +50,7 @@ export function ToolOptions() {
   useSp('tool', 'selection', 'pixels');
   const t = sp.tool;
   const hasSelection = !!(sp.mask || sp.floating);
-  const drawing = t === 'pencil' || t === 'eraser' || t === 'line' || t === 'rect' || t === 'ellipse';
+  const drawing = t === 'pencil' || t === 'eraser' || t === 'line' || t === 'shade' || t === 'rect' || t === 'ellipse';
   return (
     <div className="sp-options panel">
       {drawing && (

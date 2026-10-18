@@ -9,6 +9,8 @@ import { ColorPanel } from './ColorPanel';
 import { LayersPanel } from './LayersPanel';
 import { Palettes } from './Palettes';
 import { PreviewWindow } from './PreviewWindow';
+import { CheckPanel } from './CheckPanel';
+import { VariantsPanel } from './VariantsPanel';
 import { Timeline } from './Timeline';
 import { ToolBar } from './ToolBar';
 import { ToolOptions } from './ToolOptions';
@@ -34,6 +36,8 @@ export function SpriteEditor() {
       </div>
       <Timeline />
       <PreviewWindow />
+      <CheckPanel />
+      <VariantsPanel />
     </div>
   );
 }

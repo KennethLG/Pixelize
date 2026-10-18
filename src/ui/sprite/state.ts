@@ -19,11 +19,12 @@ import {
   blit, clearMasked, extract, floatingMask, renderFloating, type Bitmap, type Floating, type Mask,
 } from '../../core/bitmap';
 import type { RGB, RGBA } from '../../core/color';
+import type { LintIssue } from '../../core/lint';
 import { cloneDoc, createDoc, type SpriteDoc } from '../../core/sprite';
 import { createBus } from '../bus';
 
 export type SpEvent = 'pixels' | 'structure' | 'cursor' | 'selection' | 'color' | 'tool' | 'paper' | 'view' | 'hover' | 'palette' | 'playback' | 'playframe';
-export type Tool = 'pan' | 'pencil' | 'eraser' | 'line' | 'bucket' | 'picker' | 'rect' | 'ellipse' | 'select' | 'wand' | 'move' | 'canvas';
+export type Tool = 'pan' | 'pencil' | 'eraser' | 'line' | 'shade' | 'bucket' | 'picker' | 'rect' | 'ellipse' | 'select' | 'wand' | 'move' | 'canvas';
 
 /** A floating piece also remembers its layer, frame, and the cel before it was lifted (for undo). */
 export interface Float extends Floating { frame: number; layer: number; before: Uint8ClampedArray }
@@ -74,6 +75,15 @@ export const sp = {
   range: null as [number, number] | null,
   /** the tag whose settings are open in the timeline */
   editingTag: null as number | null,
+  /** everything painted, filled or pasted snaps to the user's palette */
+  paletteLock: false,
+  /** the Check panel: its problems (with their frame) and the one being looked at */
+  checkOpen: false,
+  issues: [] as (LintIssue & { frame: number })[],
+  issueFocus: null as number | null,
+  /** the Variants panel, and the variant shown on the canvas (only on screen) */
+  variantsOpen: false,
+  showVariant: null as number | null,
   /** the floating preview window */
   previewOpen: false,
   previewScale: 2,

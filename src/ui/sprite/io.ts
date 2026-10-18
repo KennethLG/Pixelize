@@ -8,9 +8,12 @@ import { DEFAULT_DURATION, composite, createDoc, parseDoc, resizeCanvas, scaleDo
 import { playbackSequence } from '../../core/frames';
 import { encodeGif } from '../../export/gif';
 import { setStatus, wait } from '../dom';
-import { canvasBlob, saveBlob } from '../downloads';
+import { canvasBlob, canvasBytes, saveBlob } from '../downloads';
 import { decodeFile, imageToData } from '../input';
 import { viewCenter } from './canvas';
+import { applyVariant, snapPalette, snapPixels, type Variant } from '../../core/shading';
+import { makeZip, type ZipEntry } from '../../export/zip';
+import { userPalette } from './prefs';
 import { cel, commitFloating, emit, floatPiece, on, pushCel, pushDoc, setDoc, setTool, sp } from './state';
 
 const SAVE_KEY = 'pixelize.sprite.doc';
@@ -20,11 +23,17 @@ const isBlank = (d: SpriteDoc) => d.frames.every((f) => f.cels.every((c) => !c.p
 const safeName = (n: string) => n.replace(/\.[^.]+$/, '').replace(/_strip\d+$/i, '').replace(/[^\w.-]+/g, '_') || 'sprite';
 const clampScale = (s: number) => Math.max(1, Math.min(64, Math.round(s) || 1));
 
-function frameCanvas(fi: number, scale = 1): HTMLCanvasElement {
+/** A frame as it exports (reference layers left out), with a variant's swaps when given. */
+const framePixels = (fi: number, variant?: Variant | null) => {
+  const px = composite(sp.doc, fi, null, { refs: false });
+  return variant ? applyVariant(px, variant) : px;
+};
+
+function frameCanvas(fi: number, scale = 1, variant?: Variant | null): HTMLCanvasElement {
   const { w, h } = sp.doc;
   const src = document.createElement('canvas');
   src.width = w; src.height = h;
-  src.getContext('2d')!.putImageData(new ImageData(composite(sp.doc, fi, null, { refs: false }), w, h), 0, 0);
+  src.getContext('2d')!.putImageData(new ImageData(framePixels(fi, variant), w, h), 0, 0);
   if (scale === 1) return src;
   const c = document.createElement('canvas');
   c.width = w * scale; c.height = h * scale;
@@ -150,6 +159,33 @@ export async function exportGif(scale: number, tag: number | null = null): Promi
   await saveBlob(new Blob([bytes], { type: 'image/gif' }), `${name}.gif`);
 }
 
+/** The original and every variant, as strips, GIFs or the current frame, in one ZIP. */
+export async function exportVariantsZip(format: 'strip' | 'gif' | 'png', scale: number): Promise<void> {
+  commitFloating();
+  const s = clampScale(scale), n = sp.doc.frames.length;
+  const all: { name: string; v: Variant | null }[] = [{ name: 'original', v: null }, ...sp.doc.variants.map((v) => ({ name: v.name, v }))];
+  const files: ZipEntry[] = [];
+  setStatus('Exporting the variants…');
+  await wait(20);
+  for (const { name, v } of all) {
+    const base = `${sp.name}_${name.replace(/[^\w.-]+/g, '_')}`;
+    if (format === 'png') {
+      files.push({ name: `${base}.png`, data: await canvasBytes(frameCanvas(sp.frame, s, v)) });
+    } else if (format === 'strip') {
+      const c = document.createElement('canvas');
+      c.width = sp.doc.w * s * n;
+      c.height = sp.doc.h * s;
+      const ctx = c.getContext('2d')!;
+      for (let i = 0; i < n; i++) ctx.drawImage(frameCanvas(i, s, v), i * sp.doc.w * s, 0);
+      files.push({ name: `${base}_strip${n}.png`, data: await canvasBytes(c) });
+    } else {
+      const frames = sp.doc.frames.map((_, i) => framePixels(i, v));
+      files.push({ name: `${base}.gif`, data: encodeGif(frames, sp.doc.w, sp.doc.h, s, sp.doc.frames.map((f) => f.duration / 10), true) });
+    }
+  }
+  await saveBlob(new Blob([makeZip(files)], { type: 'application/zip' }), `${sp.name}_variants.zip`);
+}
+
 export async function saveProject(): Promise<void> {
   commitFloating();
   await saveBlob(new Blob([serializeDoc(sp.doc)], { type: 'application/json' }), `${sp.name}.pixelize`);
@@ -200,6 +236,7 @@ export function cut(): void {
 }
 
 function pasteBitmap(piece: Bitmap, at?: { x: number; y: number }): void {
+  if (sp.paletteLock && userPalette.length) snapPixels(piece.px, snapPalette(userPalette));
   const pos = at ?? (() => { const c = viewCenter(); return { x: c.x - Math.floor(piece.w / 2), y: c.y - Math.floor(piece.h / 2) }; })();
   floatPiece(piece, pos.x, pos.y);
   setTool('move');

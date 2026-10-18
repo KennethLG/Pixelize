@@ -8,7 +8,9 @@ import { setStatus } from '../../dom';
 import { decodeFile, imageToData } from '../../input';
 import { pickSlot } from '../actions';
 import { useSp } from '../hooks';
-import { addToPalette, clearPalette, removeFromPalette, userPalette } from '../prefs';
+import { addRamp, addToPalette, clearPalette, ramps, removeFromPalette, removeRamp, setPaletteLock, userPalette } from '../prefs';
+import { DEFAULT_RAMP, hueShiftRamp } from '../../../core/shading';
+import { NumberField } from '../../components/common';
 import { setColor, sp, versions } from '../state';
 import { Swatch } from '../../components/common';
 
@@ -33,6 +35,40 @@ function useUsedColors(): number[] {
     return () => clearTimeout(t);
   }, [stamp]);
   return keys;
+}
+
+/** Ramps: generated from the primary color with hue shifting, saved for the shading brush. */
+function Ramps(props: { onPick: (rgb: RGB) => void; onSecondary: (rgb: RGB) => void }) {
+  const [opts, setOpts] = useState(DEFAULT_RAMP);
+  const p = sp.primary;
+  const preview = p[3] ? hueShiftRamp([p[0], p[1], p[2]], opts) : [];
+  return (
+    <details className="sp-ramps">
+      <summary className="label">Ramps{ramps.length ? ` · ${ramps.length}` : ''}</summary>
+      <div className="row ramp-opts">
+        <span>Steps</span><NumberField value={opts.steps} min={1} max={4} label="Steps on each side" onCommit={(v) => setOpts({ ...opts, steps: Math.round(v) })} live />
+        <span>Hue</span><NumberField value={opts.hueShift} min={0} max={45} label="Hue shift per step, in degrees" title="How far shadows turn toward blue and highlights toward yellow" onCommit={(v) => setOpts({ ...opts, hueShift: Math.round(v) })} live />
+        <span>Contrast</span><NumberField value={Math.round(opts.contrast * 100)} min={4} max={30} label="Brightness change per step, in percent" onCommit={(v) => setOpts({ ...opts, contrast: v / 100 })} live />
+      </div>
+      {preview.length > 0 ? (
+        <div className="ramp" title="From the primary color: darker on the left, lighter on the right">
+          {preview.map((c, i) => <Swatch key={i} rgb={c} onPick={() => props.onPick(c)} onSecondary={() => props.onSecondary(c)} />)}
+        </div>
+      ) : <p className="hint">Pick a primary color to build a ramp from it.</p>}
+      <div className="btns">
+        <button type="button" className="ghost small" disabled={!preview.length} title="Keep it for the shading brush" onClick={() => addRamp(preview)}>Save ramp</button>
+        <button type="button" className="ghost small" disabled={!preview.length} onClick={() => addToPalette(preview)}>+ My palette</button>
+      </div>
+      {ramps.map((r, i) => (
+        <div key={i} className="ramp saved">
+          {r.map((c, k) => <Swatch key={k} rgb={c} onPick={() => props.onPick(c)} onSecondary={() => props.onSecondary(c)} />)}
+          <button type="button" className="ghost small" title="Add these colors to My palette" onClick={() => addToPalette(r)}>+</button>
+          <button type="button" className="ghost small" aria-label="Delete this ramp" onClick={() => removeRamp(i)}>×</button>
+        </div>
+      ))}
+      <p className="hint">The shading brush steps along these ramps (or My palette in its order when there are none).</p>
+    </details>
+  );
 }
 
 export function Palettes() {
@@ -86,6 +122,10 @@ export function Palettes() {
         ))}
       </div>
       {!userPalette.length && <p className="hint">Empty. Add colors or load a Lospec palette.</p>}
+      <label className="check" title="Everything you paint, fill or paste snaps to the closest color of My palette">
+        <input type="checkbox" checked={sp.paletteLock} disabled={!userPalette.length} onChange={(e) => setPaletteLock(e.target.checked)} />Lock to my palette
+      </label>
+      <Ramps onPick={pickPrimary} onSecondary={pickSecondary} />
     </div>
   );
 }

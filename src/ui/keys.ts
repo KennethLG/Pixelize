@@ -23,6 +23,7 @@ export const ACTIONS: KeyAction[] = [
   A('sprite', 'Tools', 'pencil', 'Pencil', ['B']),
   A('sprite', 'Tools', 'eraser', 'Eraser', ['E']),
   A('sprite', 'Tools', 'line', 'Line', ['L']),
+  A('sprite', 'Tools', 'shade', 'Shading brush', ['D']),
   A('sprite', 'Tools', 'bucket', 'Paint bucket', ['G']),
   A('sprite', 'Tools', 'rect', 'Rectangle', ['U']),
   A('sprite', 'Tools', 'ellipse', 'Ellipse', ['O']),

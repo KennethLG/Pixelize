@@ -13,6 +13,7 @@ export const TOOLS: ToolDef[][] = [
     { tool: 'pencil', name: 'Pencil', help: 'Right click: secondary color. Shift+click: straight line. Alt+click: pick a color.' },
     { tool: 'eraser', name: 'Eraser' },
     { tool: 'line', name: 'Line', help: 'Shift: straight or 45°.' },
+    { tool: 'shade', name: 'Shading brush', help: 'Left click: one step lighter, right click: one step darker, along your ramps (or My palette in its order).' },
     { tool: 'bucket', name: 'Paint bucket' },
     { tool: 'rect', name: 'Rectangle', help: 'Shift: square.' },
     { tool: 'ellipse', name: 'Ellipse', help: 'Shift: circle.' },

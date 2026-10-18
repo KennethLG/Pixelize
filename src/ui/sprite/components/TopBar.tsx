@@ -4,13 +4,13 @@ import { useRef, useState } from 'react';
 import { setStatus } from '../../dom';
 import { useSp } from '../hooks';
 import { MAX_SIDE, exportGif, exportPng, exportStrip, newSprite, openFile, resizeSprite, saveProject } from '../io';
-import { canRedo, canUndo, redo, sp, undo } from '../state';
+import { canRedo, canUndo, emit, redo, sp, undo } from '../state';
 import { NumberField } from '../../components/common';
 
 const report = (p: Promise<unknown>) => { p.catch((e) => setStatus((e as Error).message, true)); };
 
 export function TopBar() {
-  useSp('structure', 'pixels', 'selection');
+  useSp('structure', 'pixels', 'selection', 'view');
   const file = useRef<HTMLInputElement>(null);
   // what the size fields hold; they follow the canvas when it changes
   const [w, setW] = useState(sp.doc.w);
@@ -45,6 +45,12 @@ export function TopBar() {
       <div className="group">
         <button type="button" className="ghost small" title="Undo (Ctrl+Z)" disabled={!canUndo()} onClick={undo}>Undo</button>
         <button type="button" className="ghost small" title="Redo (Ctrl+Y)" disabled={!canRedo()} onClick={redo}>Redo</button>
+      </div>
+      <div className="group">
+        <button type="button" className="ghost small" title="Look for orphan pixels, jaggies, banding and colors that are almost the same" aria-pressed={sp.checkOpen}
+          onClick={() => { sp.checkOpen = !sp.checkOpen; if (!sp.checkOpen) { sp.issues = []; sp.issueFocus = null; } emit('view'); }}>Check</button>
+        <button type="button" className="ghost small" title="Color variants of the sprite (red team, blue team…)" aria-pressed={sp.variantsOpen}
+          onClick={() => { sp.variantsOpen = !sp.variantsOpen; if (!sp.variantsOpen) sp.showVariant = null; emit('view'); }}>Variants</button>
       </div>
       <div className="group sp-export">
         <span className="muted">Export</span>

@@ -9,7 +9,7 @@ import { fitView, nudge, selectAll, setSpaceHeld, zoomStep } from './canvas';
 import { copy, cut } from './io';
 import { commitFloating, deselect, emit, redo, setFrame, setTool, sp, undo, type Tool } from './state';
 
-const TOOLS: Tool[] = ['pencil', 'eraser', 'line', 'bucket', 'rect', 'ellipse', 'picker', 'select', 'wand', 'move', 'canvas', 'pan'];
+const TOOLS: Tool[] = ['pencil', 'eraser', 'line', 'shade', 'bucket', 'rect', 'ellipse', 'picker', 'select', 'wand', 'move', 'canvas', 'pan'];
 
 const RUN: Record<string, () => void> = {
   swapColors,

@@ -3,20 +3,22 @@
 
 import { flip, newBitmap, scaleNearest, type Bitmap } from './bitmap';
 import type { Direction } from './frames';
+import type { Variant } from './shading';
 
 /** A reference layer is shown while drawing but left out of exports and of the colors in use. */
 export interface Layer { name: string; visible: boolean; opacity: number; ref?: boolean }
 export interface Frame { cels: Bitmap[]; duration: number }
 /** A named run of frames (idle, walk…) with its own playback direction. `from`/`to` are frame indices, both included. */
 export interface Tag { name: string; from: number; to: number; dir: Direction; color: string }
-export interface SpriteDoc { w: number; h: number; layers: Layer[]; frames: Frame[]; tags: Tag[] }
+/** `variants` are color swaps of the whole sprite (red team, blue team…), see core/shading.ts. */
+export interface SpriteDoc { w: number; h: number; layers: Layer[]; frames: Frame[]; tags: Tag[]; variants: Variant[] }
 
 export const TAG_COLORS = ['#d9732b', '#3f9a6a', '#4a7fd6', '#b0479d', '#c9a227', '#3fa3b8'];
 
 export const DEFAULT_DURATION = 100; // ms
 
 export function createDoc(w: number, h: number): SpriteDoc {
-  return { w, h, layers: [{ name: 'Layer 1', visible: true, opacity: 1 }], frames: [{ cels: [newBitmap(w, h)], duration: DEFAULT_DURATION }], tags: [] };
+  return { w, h, layers: [{ name: 'Layer 1', visible: true, opacity: 1 }], frames: [{ cels: [newBitmap(w, h)], duration: DEFAULT_DURATION }], tags: [], variants: [] };
 }
 
 export const cloneDoc = (d: SpriteDoc): SpriteDoc => ({
@@ -24,6 +26,7 @@ export const cloneDoc = (d: SpriteDoc): SpriteDoc => ({
   layers: d.layers.map((l) => ({ ...l })),
   frames: d.frames.map((f) => ({ duration: f.duration, cels: f.cels.map((c) => ({ w: c.w, h: c.h, px: c.px.slice() })) })),
   tags: (d.tags || []).map((t) => ({ ...t })),
+  variants: (d.variants || []).map((v) => ({ name: v.name, map: { ...v.map } })),
 });
 
 const move = <T>(arr: T[], from: number, to: number) => { const [x] = arr.splice(from, 1); arr.splice(to, 0, x); };
@@ -253,7 +256,7 @@ export function usedColors(d: SpriteDoc): number[] {
 
 // ---------- saving (autosave and project files) ----------
 
-interface SavedDoc { v: 1; w: number; h: number; layers: Layer[]; frames: { duration: number; cels: string[] }[]; tags?: Tag[] }
+interface SavedDoc { v: 1; w: number; h: number; layers: Layer[]; frames: { duration: number; cels: string[] }[]; tags?: Tag[]; variants?: Variant[] }
 
 const toB64 = (px: Uint8ClampedArray) => {
   let s = '';
@@ -263,7 +266,7 @@ const toB64 = (px: Uint8ClampedArray) => {
 const fromB64 = (s: string) => Uint8ClampedArray.from(atob(s), (ch) => ch.charCodeAt(0));
 
 export function serializeDoc(d: SpriteDoc): string {
-  const saved: SavedDoc = { v: 1, w: d.w, h: d.h, layers: d.layers, frames: d.frames.map((f) => ({ duration: f.duration, cels: f.cels.map((c) => toB64(c.px)) })), tags: d.tags };
+  const saved: SavedDoc = { v: 1, w: d.w, h: d.h, layers: d.layers, frames: d.frames.map((f) => ({ duration: f.duration, cels: f.cels.map((c) => toB64(c.px)) })), tags: d.tags, variants: d.variants };
   return JSON.stringify(saved);
 }
 
@@ -275,6 +278,15 @@ function parseTags(tags: unknown, n: number): Tag[] {
     if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return [];
     return [{ name: String(t.name ?? 'Tag'), from, to, dir: DIRS.includes(t.dir as Direction) ? t.dir as Direction : 'forward', color: /^#[0-9a-f]{6}$/i.test(String(t.color)) ? String(t.color) : TAG_COLORS[0] }];
   });
+}
+
+function parseVariants(vs: unknown): Variant[] {
+  if (!Array.isArray(vs)) return [];
+  const isHex = (h: unknown) => typeof h === 'string' && /^#[0-9a-f]{6}$/i.test(h);
+  return vs.map((v: Partial<Variant>) => ({
+    name: String(v.name ?? 'Variant'),
+    map: Object.fromEntries(Object.entries(v.map ?? {}).filter(([f, t]) => isHex(f) && isHex(t))),
+  }));
 }
 
 export function parseDoc(text: string): SpriteDoc | null {
@@ -289,7 +301,7 @@ export function parseDoc(text: string): SpriteDoc | null {
         return { w: s.w, h: s.h, px: px.length === size ? px : new Uint8ClampedArray(size) };
       }),
     }));
-    return { w: s.w, h: s.h, layers: s.layers.map((l) => ({ name: String(l.name), visible: l.visible !== false, opacity: Number.isFinite(+l.opacity) ? Math.max(0, Math.min(1, +l.opacity)) : 1, ...(l.ref ? { ref: true } : {}) })), frames, tags: parseTags(s.tags, frames.length) };
+    return { w: s.w, h: s.h, layers: s.layers.map((l) => ({ name: String(l.name), visible: l.visible !== false, opacity: Number.isFinite(+l.opacity) ? Math.max(0, Math.min(1, +l.opacity)) : 1, ...(l.ref ? { ref: true } : {}) })), frames, tags: parseTags(s.tags, frames.length), variants: parseVariants(s.variants) };
   } catch {
     return null;
   }

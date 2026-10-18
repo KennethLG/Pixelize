@@ -8,8 +8,10 @@ import {
   paintPoints, rectMask, replaceColor, snapAngle, stamp, type Bitmap, type Box, type MaskOp, type PaintOpts,
 } from '../../core/bitmap';
 import { hex, type RGBA } from '../../core/color';
+import { applyVariant, nearestColor, shadeColor, snapPalette, type SnapPalette } from '../../core/shading';
+import { shadeRamps, userPalette } from './prefs';
 import { cloneDoc, composite, cropCanvas, scaleDoc, type SpriteDoc } from '../../core/sprite';
-import { cssVar } from '../dom';
+import { cssVar, setStatus as setStatusText } from '../dom';
 import { cel, commitFloating, deselect, emit, lift, liveCel, on, pushCel, pushDoc, setColor, sp, type Tool } from './state';
 
 type Pt = { x: number; y: number };
@@ -95,7 +97,7 @@ const onTiles = (p: Pt) => sp.tileMode && p.x >= -sp.doc.w && p.y >= -sp.doc.h &
 const toCanvas = (p: Pt): Pt => (onTiles(p) ? { x: mod(p.x, sp.doc.w), y: mod(p.y, sp.doc.h) } : p);
 /** How the drawing tools paint right now. */
 const paintOpts = (): PaintOpts => ({ mask: sp.mask, symX: sp.symX, symY: sp.symY, wrap: sp.tileMode });
-const DRAW_TOOLS = ['pencil', 'eraser', 'line', 'rect', 'ellipse'];
+const DRAW_TOOLS = ['pencil', 'eraser', 'line', 'shade', 'rect', 'ellipse'];
 
 /** The middle of what is on screen, in sprite pixels (where pastes land). */
 export function viewCenter(): Pt {
@@ -166,7 +168,11 @@ export function draw(): void {
   if (sp.onion && peek === null) drawOnion(ctx, ox, oy, W, H);
   const live = peek === null ? liveCel() : null;
   const layer = sp.floating ? sp.floating.layer : sp.layer;
-  putImage(art, composite(sp.doc, peek ?? sp.frame, live ? { layer, cel: live } : undefined), w, h);
+  let shown = composite(sp.doc, peek ?? sp.frame, live ? { layer, cel: live } : undefined);
+  // a variant only changes what is on screen
+  const variant = sp.showVariant === null ? null : sp.doc.variants[sp.showVariant];
+  if (variant) shown = applyVariant(shown, variant);
+  putImage(art, shown, w, h);
   ctx.drawImage(art, ox, oy, W, H);
   if (tiles.length) {
     for (const [tx, ty] of tiles) ctx.drawImage(art, ox + tx * W, oy + ty * H, W, H);
@@ -201,6 +207,17 @@ export function draw(): void {
     ctx.stroke();
     ctx.restore();
   }
+
+  if (variant && peek === null) {
+    ctx.font = '600 12px "JetBrains Mono", monospace';
+    const label = `Variant: ${variant.name}`, lw = ctx.measureText(label).width + 12;
+    ctx.fillStyle = cssVar('--accent');
+    ctx.fillRect(ox, Math.max(4, oy - 26), lw, 20);
+    ctx.fillStyle = cssVar('--accent-ink');
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, ox + 6, Math.max(4, oy - 26) + 10);
+  }
+  if (sp.checkOpen && peek === null) drawIssues(ctx);
 
   if (peek !== null) {
     const label = `Frame ${peek + 1}`;
@@ -320,6 +337,34 @@ function drawOnion(ctx: CanvasRenderingContext2D, ox: number, oy: number, W: num
   ctx.globalAlpha = 1;
 }
 
+/** The Check panel's problems on this frame: a ring around each pixel, a thicker one on the one being looked at. */
+function drawIssues(ctx: CanvasRenderingContext2D): void {
+  const { zoom: z, ox, oy } = view;
+  const COLORS: Record<string, string> = { orphan: '#ff4d6d', jaggy: '#ffb000', banding: '#9b5cff', duplicate: '#21c7d9' };
+  ctx.save();
+  sp.issues.forEach((it, i) => {
+    if (it.frame !== sp.frame) return;
+    const focus = i === sp.issueFocus;
+    const r = Math.max(z * 0.8, 6) + (focus ? 4 : 0);
+    ctx.strokeStyle = COLORS[it.kind];
+    ctx.lineWidth = focus ? 3 : 1.5;
+    ctx.beginPath();
+    ctx.arc(ox + (it.x + 0.5) * z, oy + (it.y + 0.5) * z, r, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
+/** Puts pixel x, y in the middle of the view (zooming in if the art is small on screen). */
+export function centerOn(x: number, y: number): void {
+  if (!view.cw) return;
+  if (view.zoom < 8) setZoom(8, null);
+  view.ox = Math.round(view.cw / 2 - (x + 0.5) * view.zoom);
+  view.oy = Math.round(view.ch / 2 - (y + 0.5) * view.zoom);
+  viewTouched = true;
+  draw();
+}
+
 // ---------- tools ----------
 
 type Gesture =
@@ -327,6 +372,8 @@ type Gesture =
   // `path` keeps the pixels of a pixel-perfect stroke, to take back L-shaped corners
   | { type: 'paint'; color: RGBA; last: Pt; before: Uint8ClampedArray; perfect: boolean; path: [number, number][] }
   | { type: 'rect'; shape: 'rect' | 'ellipse' | 'line'; color: RGBA; start: Pt; end: Pt }
+  // shading: each pixel changes once per stroke, from its color before the stroke
+  | { type: 'shade'; dir: 1 | -1; last: Pt; before: Uint8ClampedArray; done: Set<number> }
   | { type: 'marquee'; start: Pt; end: Pt; op: MaskOp }
   // the pixels are only lifted once the pointer really moves, so a click stays a click
   | { type: 'move'; start: Pt; fx: number; fy: number; lifted: boolean; tool: Tool }
@@ -336,7 +383,33 @@ type Gesture =
 
 let gesture: Gesture | null = null;
 
-const colorFor = (e: PointerEvent): RGBA => (e.button === 2 ? sp.secondary : sp.primary);
+let lockCache: { cols: typeof userPalette; snap: SnapPalette } | null = null;
+/** With the palette locked, a color becomes the closest one of the user's palette. */
+export function lockColor(c: RGBA): RGBA {
+  if (!sp.paletteLock || !c[3] || !userPalette.length) return c;
+  if (lockCache?.cols !== userPalette) lockCache = { cols: userPalette, snap: snapPalette(userPalette) };
+  return [...nearestColor([c[0], c[1], c[2]], lockCache.snap), 255];
+}
+const colorFor = (e: PointerEvent): RGBA => lockColor(e.button === 2 ? sp.secondary : sp.primary);
+
+function shadePoint(g: Extract<Gesture, { type: 'shade' }>, x: number, y: number): void {
+  const c = cel(), o = paintOpts(), ramps = shadeRamps();
+  const off = Math.floor((sp.brush - 1) / 2);
+  for (let dy = 0; dy < sp.brush; dy++) {
+    for (let dx = 0; dx < sp.brush; dx++) {
+      for (const [px, py] of paintPoints(c.w, c.h, x - off + dx, y - off + dy, o)) {
+        if (px < 0 || py < 0 || px >= c.w || py >= c.h) continue;
+        const p = py * c.w + px;
+        if ((o.mask && !o.mask[p]) || g.done.has(p)) continue;
+        g.done.add(p);
+        const i = p * 4;
+        if (!g.before[i + 3]) continue;
+        const next = shadeColor([g.before[i], g.before[i + 1], g.before[i + 2]], ramps, g.dir);
+        if (next) { c.px[i] = next[0]; c.px[i + 1] = next[1]; c.px[i + 2] = next[2]; }
+      }
+    }
+  }
+}
 const maskOp = (e: { shiftKey: boolean; altKey: boolean }): MaskOp => (e.shiftKey ? 'add' : e.altKey ? 'subtract' : 'replace');
 const inMask = (p: Pt) => {
   const f = sp.floating;
@@ -494,6 +567,15 @@ function onPointerDown(e: PointerEvent): void {
     draw();
     return;
   }
+  if (tool === 'shade') {
+    if (!shadeRamps().length) { setStatusText('The shading brush needs a ramp or colors in My palette.'); return; }
+    // left click: one step lighter, right click: one step darker
+    const g: Extract<Gesture, { type: 'shade' }> = { type: 'shade', dir: e.button === 2 ? -1 : 1, last: p, before: cel().px.slice(), done: new Set() };
+    shadePoint(g, p.x, p.y);
+    gesture = g;
+    draw();
+    return;
+  }
   if (tool === 'bucket') { bucket(p, colorFor(e)); return; }
   if (tool === 'rect' || tool === 'ellipse' || tool === 'line') {
     gesture = { type: 'rect', shape: tool, color: colorFor(e), start: p, end: p };
@@ -532,6 +614,10 @@ function onPointerMove(e: PointerEvent): void {
   } else if (g.type === 'paint') {
     if (p.x === g.last.x && p.y === g.last.y) return;
     strokeTo(g, p);
+  } else if (g.type === 'shade') {
+    if (p.x === g.last.x && p.y === g.last.y) return;
+    for (const [x, y] of linePoints(g.last.x, g.last.y, p.x, p.y).slice(1)) shadePoint(g, x, y);
+    g.last = p;
   } else if (g.type === 'rect') {
     g.end = p;
     rectPreview(g, e.shiftKey);
@@ -600,7 +686,7 @@ function endGesture(e: PointerEvent): void {
   gesture = null;
   stage().classList.remove('panning');
   if (!g) return;
-  if (g.type === 'paint') { pushCel(sp.frame, sp.layer, g.before); emit('pixels'); }
+  if (g.type === 'paint' || g.type === 'shade') { pushCel(sp.frame, sp.layer, g.before); emit('pixels'); }
   else if (g.type === 'rect') {
     const c = cel(), before = c.px.slice();
     if (sp.preview) c.px.set(sp.preview.px);
