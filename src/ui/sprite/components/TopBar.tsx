@@ -18,6 +18,9 @@ export function TopBar() {
   const [shown, setShown] = useState(`${sp.doc.w}x${sp.doc.h}`);
   if (shown !== `${sp.doc.w}x${sp.doc.h}`) { setShown(`${sp.doc.w}x${sp.doc.h}`); setW(sp.doc.w); setH(sp.doc.h); }
   const [scale, setScale] = useState(1);
+  // what Strip and GIF export: everything, or one tag
+  const [what, setWhat] = useState('all');
+  const tag = what === 'all' || !sp.doc.tags[Number(what)] ? null : Number(what);
 
   return (
     <div className="sp-bar panel">
@@ -48,8 +51,14 @@ export function TopBar() {
         <NumberField value={scale} min={1} max={64} label="Export scale" title="Scale" onCommit={setScale} live />
         <span className="muted">×</span>
         <button type="button" className="small" title="The current frame" onClick={() => report(exportPng(scale))}>PNG</button>
-        <button type="button" className="small" title="All frames side by side, named _stripN.png for GameMaker" onClick={() => report(exportStrip(scale))}>Strip</button>
-        <button type="button" className="small" onClick={() => report(exportGif(scale))}>GIF</button>
+        {sp.doc.tags.length > 0 && (
+          <select aria-label="Frames to export" title="Strip and GIF export all frames or one tag" value={tag === null ? 'all' : String(tag)} onChange={(e) => setWhat(e.target.value)}>
+            <option value="all">All frames</option>
+            {sp.doc.tags.map((t, i) => <option key={i} value={String(i)}>{t.name}</option>)}
+          </select>
+        )}
+        <button type="button" className="small" title="The frames side by side, named _stripN.png for GameMaker" onClick={() => report(exportStrip(scale, tag))}>Strip</button>
+        <button type="button" className="small" onClick={() => report(exportGif(scale, tag))}>GIF</button>
       </div>
       <p className="status" id="spStatus" role="status" />
     </div>

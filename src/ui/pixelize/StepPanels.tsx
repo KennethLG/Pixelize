@@ -4,6 +4,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { hex, rgbOfKey } from '../../core/color';
 import { confidenceLevel } from '../../core/grid';
 import { HsvPicker } from '../components/HsvPicker';
+import { keyLabel, keysBus } from '../keys';
 import { app, canRedo, canUndo, pxBus, redo, schedule, undo } from '../app';
 import { animFrameCanvases, animInfo, downloadFramesZip, downloadGif, downloadSheet, downloadStrip } from '../anim';
 import { runBatch } from '../batch';
@@ -189,24 +190,25 @@ export function CleanStep() {
 
 // ---------- 5 · Touch up ----------
 
-const EDIT_TOOLS: { tool: EditTool; name: string; key: string; title: string }[] = [
-  { tool: 'pan', name: 'Move', key: 'H', title: 'Move the view (H, or hold Space)' },
-  { tool: 'pencil', name: 'Pencil', key: 'B', title: 'Pencil (B)' },
-  { tool: 'eraser', name: 'Eraser', key: 'E', title: 'Eraser (E)' },
-  { tool: 'fill', name: 'Fill', key: 'G', title: 'Fill an area of one color (G)' },
-  { tool: 'picker', name: 'Eyedropper', key: 'I', title: 'Take a color from the image (I)' },
+const EDIT_TOOLS: { tool: EditTool; name: string; title: string }[] = [
+  { tool: 'pan', name: 'Move', title: 'Move the view' },
+  { tool: 'pencil', name: 'Pencil', title: 'Pencil' },
+  { tool: 'eraser', name: 'Eraser', title: 'Eraser' },
+  { tool: 'fill', name: 'Fill', title: 'Fill an area of one color' },
+  { tool: 'picker', name: 'Eyedropper', title: 'Take a color from the image' },
 ];
 
 export function EditStep() {
   pxBus.use('editor', 'result');
+  keysBus.use('keys');
   const n = app.edits.size;
   return (
     <Panel step="edit" title="Touch up pixels">
       <p>Fix single pixels by hand. You can skip this.</p>
       <div className="toolgrid" role="toolbar" aria-label="Editing tools">
         {EDIT_TOOLS.map((t) => (
-          <button key={t.tool} type="button" className="tool" title={t.title} aria-pressed={ed.tool === t.tool} onClick={() => setTool(t.tool)}>
-            {t.name} <kbd>{t.key}</kbd>
+          <button key={t.tool} type="button" className="tool" title={`${t.title} (${keyLabel(`pixelize.${t.tool}`)})`} aria-pressed={ed.tool === t.tool} onClick={() => setTool(t.tool)}>
+            {t.name} <kbd>{keyLabel(`pixelize.${t.tool}`)}</kbd>
           </button>
         ))}
       </div>

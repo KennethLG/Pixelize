@@ -285,10 +285,12 @@ export function attachAlign(stage: HTMLElement, cv: HTMLCanvasElement): () => vo
   cv.addEventListener('pointercancel', end);
   const scheme = matchMedia('(prefers-color-scheme: dark)');
   scheme.addEventListener('change', drawAlign);
+  window.addEventListener('themechange', drawAlign);
   drawAlign();
   return () => {
     ro.disconnect();
     scheme.removeEventListener('change', drawAlign);
+    window.removeEventListener('themechange', drawAlign);
     cv.removeEventListener('pointerdown', down);
     cv.removeEventListener('pointermove', move);
     cv.removeEventListener('pointerup', end);

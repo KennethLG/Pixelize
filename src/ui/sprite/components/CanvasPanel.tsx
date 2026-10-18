@@ -39,6 +39,16 @@ export function CanvasPanel() {
           <span className="muted">×</span>
           <NumberField id="spGridH" value={sp.gridH} min={1} max={512} label="Grid cell height" title="Grid cell size in pixels (1 = every pixel)" onCommit={(v) => setGrid({ gridH: clampGrid(v) })} live />
           <label className="check"><input type="checkbox" checked={sp.onion} onChange={(e) => { sp.onion = e.target.checked; emit('view'); }} />Onion skin</label>
+          <details className="sp-pop">
+            <summary title="Onion skin settings" aria-label="Onion skin settings">▾</summary>
+            <div className="sp-pop-body panel">
+              <div className="row"><span>Frames behind</span><NumberField value={sp.onionBefore} min={0} max={5} label="Frames behind" onCommit={(v) => { sp.onionBefore = Math.round(v); sp.onion = true; emit('view'); }} live /></div>
+              <div className="row"><span>Frames ahead</span><NumberField value={sp.onionAfter} min={0} max={5} label="Frames ahead" onCommit={(v) => { sp.onionAfter = Math.round(v); sp.onion = true; emit('view'); }} live /></div>
+              <div className="row"><span>Opacity</span><input type="range" min={5} max={100} value={Math.round(sp.onionOpacity * 100)} aria-label="Onion skin opacity"
+                onChange={(e) => { sp.onionOpacity = Number(e.target.value) / 100; emit('view'); }} /><output>{Math.round(sp.onionOpacity * 100)}%</output></div>
+              <label className="check"><input type="checkbox" checked={sp.onionTint} onChange={(e) => { sp.onionTint = e.target.checked; emit('view'); }} />Tint: red behind, blue ahead</label>
+            </div>
+          </details>
           <label className="check" title="Show 3 × 3 copies of the canvas; strokes wrap around the edges, for seamless tiles"><input type="checkbox" checked={sp.tileMode} onChange={(e) => setTileMode(e.target.checked)} />Tile</label>
         </div>
         <div className="group" role="group" aria-label="Paper">

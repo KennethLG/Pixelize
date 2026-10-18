@@ -161,15 +161,12 @@ export function draw(): void {
   ctx.restore();
   ctx.imageSmoothingEnabled = false;
 
-  if (sp.onion && sp.frame > 0) {
-    putImage(onionCanvas, composite(sp.doc, sp.frame - 1, null, { refs: false }), w, h);
-    ctx.globalAlpha = 0.3;
-    ctx.drawImage(onionCanvas, ox, oy, W, H);
-    ctx.globalAlpha = 1;
-  }
-  const live = liveCel();
+  // quick flip shows another frame as it is, with nothing on top
+  const peek = sp.peek !== null && sp.peek < sp.doc.frames.length ? sp.peek : null;
+  if (sp.onion && peek === null) drawOnion(ctx, ox, oy, W, H);
+  const live = peek === null ? liveCel() : null;
   const layer = sp.floating ? sp.floating.layer : sp.layer;
-  putImage(art, composite(sp.doc, sp.frame, live ? { layer, cel: live } : undefined), w, h);
+  putImage(art, composite(sp.doc, peek ?? sp.frame, live ? { layer, cel: live } : undefined), w, h);
   ctx.drawImage(art, ox, oy, W, H);
   if (tiles.length) {
     for (const [tx, ty] of tiles) ctx.drawImage(art, ox + tx * W, oy + ty * H, W, H);
@@ -203,6 +200,18 @@ export function draw(): void {
     if (sp.symY) { const Y = Math.round(oy + H / 2) + 0.5; ctx.moveTo(ox - 6, Y); ctx.lineTo(ox + W + 6, Y); }
     ctx.stroke();
     ctx.restore();
+  }
+
+  if (peek !== null) {
+    const label = `Frame ${peek + 1}`;
+    ctx.font = '600 12px "JetBrains Mono", monospace';
+    const lw = ctx.measureText(label).width + 12;
+    ctx.fillStyle = cssVar('--accent');
+    ctx.fillRect(ox, Math.max(4, oy - 26), lw, 20);
+    ctx.fillStyle = cssVar('--accent-ink');
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, ox + 6, Math.max(4, oy - 26) + 10);
+    return;
   }
 
   drawSelection(ctx);
@@ -285,6 +294,30 @@ function drawCanvasHandles(ctx: CanvasRenderingContext2D): void {
     ctx.textBaseline = 'middle';
     ctx.fillText(label, x + 6, y + 10);
   }
+}
+
+/** Frames behind (red) and ahead (blue) of the current one, fainter the further they are. */
+function drawOnion(ctx: CanvasRenderingContext2D, ox: number, oy: number, W: number, H: number): void {
+  const { w, h } = sp.doc, n = sp.doc.frames.length;
+  const layers: [number, string][] = [];
+  for (let k = sp.onionBefore; k >= 1; k--) if (sp.frame - k >= 0) layers.push([sp.frame - k, 'rgb(230, 70, 60)']);
+  for (let k = sp.onionAfter; k >= 1; k--) if (sp.frame + k < n) layers.push([sp.frame + k, 'rgb(60, 120, 235)']);
+  for (const [fi, tint] of layers) {
+    const dist = Math.abs(fi - sp.frame), most = fi < sp.frame ? sp.onionBefore : sp.onionAfter;
+    putImage(onionCanvas, composite(sp.doc, fi, null, { refs: false }), w, h);
+    if (sp.onionTint) {
+      const g = onionCanvas.getContext('2d')!;
+      g.globalCompositeOperation = 'source-atop';
+      g.fillStyle = tint;
+      g.globalAlpha = 0.6;
+      g.fillRect(0, 0, w, h);
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = 'source-over';
+    }
+    ctx.globalAlpha = sp.onionOpacity * (1 - (dist - 1) / (most + 1));
+    ctx.drawImage(onionCanvas, ox, oy, W, H);
+  }
+  ctx.globalAlpha = 1;
 }
 
 // ---------- tools ----------
@@ -425,6 +458,7 @@ function resizeTo(g: Extract<Gesture, { type: 'canvas' }>, e: PointerEvent): voi
 }
 
 function onPointerDown(e: PointerEvent): void {
+  if (sp.peek !== null) return;
   canvas().setPointerCapture(e.pointerId);
   canvas().focus({ preventScroll: true });
   const p = pixelAt(e);
@@ -621,7 +655,8 @@ function updateCursorInfo(p: Pt | null): void {
 
 /** Moves the selection 1 px (or more) by lifting it. */
 export function nudge(dx: number, dy: number): void {
-  if (!sp.mask && !sp.floating) return;
+  // with the Move tool and nothing selected, the arrows move the whole layer
+  if (!sp.mask && !sp.floating && sp.tool !== 'move') return;
   const f = lift();
   if (!f) return;
   f.x += dx;
@@ -664,6 +699,7 @@ export function attachCanvas(stageBox: HTMLElement, canvasBox: HTMLCanvasElement
   const scheme = matchMedia('(prefers-color-scheme: dark)');
   const rescheme = () => { checker = null; draw(); };
   scheme.addEventListener('change', rescheme);
+  window.addEventListener('themechange', rescheme);
 
   const offs = [
     on('pixels', draw), on('selection', draw), on('cursor', draw), on('structure', draw),
@@ -681,6 +717,7 @@ export function attachCanvas(stageBox: HTMLElement, canvasBox: HTMLCanvasElement
     ro.disconnect();
     clearInterval(ants);
     scheme.removeEventListener('change', rescheme);
+    window.removeEventListener('themechange', rescheme);
     offs.forEach((off) => off());
     c.removeEventListener('pointerdown', onPointerDown);
     c.removeEventListener('pointermove', onPointerMove);

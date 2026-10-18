@@ -6,6 +6,7 @@ import { emit, on, sp } from './state';
 const PAPER_KEY = 'pixelize.sprite.paper';
 const GRID_KEY = 'pixelize.sprite.grid';
 const PAL_KEY = 'pixelize.sprite.palette';
+const ONION_KEY = 'pixelize.sprite.onion';
 const DEFAULT_PALETTE = ['#1b1530', '#5a5470', '#a8a4b8', '#f4f1e8', '#7a2d3a', '#d9732b', '#f0c060', '#3f7a4a'];
 
 /** The user's own palette. Change it with the functions below so it is saved and shown. */
@@ -52,6 +53,15 @@ export function loadPrefs(): void {
   const pal = read<unknown[]>(PAL_KEY);
   userPalette = Array.isArray(pal) && pal.length ? pal.filter(isHex).map(hexToRgb) : DEFAULT_PALETTE.map(hexToRgb);
 
+  const onion = read<{ before: number; after: number; opacity: number; tint: boolean }>(ONION_KEY);
+  if (onion) {
+    sp.onionBefore = Math.max(0, Math.min(5, Math.round(onion.before) || 0));
+    sp.onionAfter = Math.max(0, Math.min(5, Math.round(onion.after) || 0));
+    sp.onionOpacity = Math.max(0.05, Math.min(1, Number(onion.opacity) || 0.35));
+    sp.onionTint = onion.tint !== false;
+  }
+
   on('paper', () => write(PAPER_KEY, { mode: sp.paperMode, color: hex(sp.paperColor) }));
+  on('view', () => write(ONION_KEY, { before: sp.onionBefore, after: sp.onionAfter, opacity: sp.onionOpacity, tint: sp.onionTint }));
   on('view', () => write(GRID_KEY, { w: sp.gridW, h: sp.gridH, show: sp.showGrid }));
 }

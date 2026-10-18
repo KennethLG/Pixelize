@@ -10,6 +10,8 @@ import { animState, initAnim } from './ui/anim';
 import { app, schedule } from './ui/app';
 import { runBatch } from './ui/batch';
 import { initDownloads } from './ui/downloads';
+import { initKeys } from './ui/keys';
+import { initTheme } from './ui/theme';
 import { initEditor } from './ui/editor';
 import { initInput, loadSample, sampleCanvas } from './ui/input';
 import { currentMode, initMode, onMode, setMode } from './ui/mode';
@@ -19,6 +21,8 @@ import { initSettings, settings } from './ui/settings';
 import { initSprite, showSprite, spriteState } from './ui/sprite';
 import { goTo, initSteps } from './ui/steps';
 
+initTheme();
+initKeys();
 startWorker();
 initSettings();
 initPalette();

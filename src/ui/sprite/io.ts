@@ -5,6 +5,7 @@
 
 import { extract, newBitmap, renderFloating, type Bitmap } from '../../core/bitmap';
 import { DEFAULT_DURATION, composite, createDoc, parseDoc, resizeCanvas, scaleDoc, serializeDoc, type SpriteDoc } from '../../core/sprite';
+import { playbackSequence } from '../../core/frames';
 import { encodeGif } from '../../export/gif';
 import { setStatus, wait } from '../dom';
 import { canvasBlob, saveBlob } from '../downloads';
@@ -117,24 +118,36 @@ export async function exportPng(scale: number): Promise<void> {
   await saveBlob(await canvasBlob(frameCanvas(sp.frame, s)), `${sp.name}${suffix}${s > 1 ? `_x${s}` : ''}.png`);
 }
 
-export async function exportStrip(scale: number): Promise<void> {
+/** The frames an export covers: one tag (by index) or all of them, and the file name part. */
+function exportRange(tag: number | null): { frames: number[]; name: string; dir: 'forward' | 'reverse' | 'pingpong' } {
+  const t = tag === null ? null : sp.doc.tags[tag];
+  const all = sp.doc.frames.map((_, i) => i);
+  if (!t) return { frames: all, name: sp.name, dir: 'forward' };
+  return { frames: all.slice(t.from, t.to + 1), name: `${sp.name}_${t.name.replace(/[^\w.-]+/g, '_')}`, dir: t.dir };
+}
+
+export async function exportStrip(scale: number, tag: number | null = null): Promise<void> {
   commitFloating();
-  const s = clampScale(scale), n = sp.doc.frames.length;
+  const { frames, name } = exportRange(tag);
+  const s = clampScale(scale), n = frames.length;
   const c = document.createElement('canvas');
   c.width = sp.doc.w * s * n;
   c.height = sp.doc.h * s;
   const ctx = c.getContext('2d')!;
-  for (let i = 0; i < n; i++) ctx.drawImage(frameCanvas(i, s), i * sp.doc.w * s, 0);
-  await saveBlob(await canvasBlob(c), `${sp.name}_strip${n}.png`);
+  frames.forEach((fi, k) => ctx.drawImage(frameCanvas(fi, s), k * sp.doc.w * s, 0));
+  await saveBlob(await canvasBlob(c), `${name}_strip${n}.png`);
 }
 
-export async function exportGif(scale: number): Promise<void> {
+export async function exportGif(scale: number, tag: number | null = null): Promise<void> {
   commitFloating();
   setStatus('Encoding GIF…');
   await wait(20);
-  const frames = sp.doc.frames.map((_, i) => composite(sp.doc, i, null, { refs: false }));
-  const bytes = encodeGif(frames, sp.doc.w, sp.doc.h, clampScale(scale), sp.doc.frames.map((f) => f.duration / 10), true);
-  await saveBlob(new Blob([bytes], { type: 'image/gif' }), `${sp.name}.gif`);
+  // a tag plays in its own direction (a ping-pong tag goes there and back)
+  const { frames: range, name, dir } = exportRange(tag);
+  const seq = playbackSequence(range, dir, false);
+  const frames = seq.map((i) => composite(sp.doc, i, null, { refs: false }));
+  const bytes = encodeGif(frames, sp.doc.w, sp.doc.h, clampScale(scale), seq.map((i) => sp.doc.frames[i].duration / 10), true);
+  await saveBlob(new Blob([bytes], { type: 'image/gif' }), `${name}.gif`);
 }
 
 export async function saveProject(): Promise<void> {

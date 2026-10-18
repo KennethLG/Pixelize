@@ -6,6 +6,7 @@
 import { hex, keyAt, type RGB, type RGBA } from '../core/color';
 import { app, commitEdits, pushUndo, pxBus, redo, schedule, undo } from './app';
 import { cssVar } from './dom';
+import { actionFor, releases } from './keys';
 import { currentMode } from './mode';
 import { setSettings, settings } from './settings';
 import { currentStep } from './steps';
@@ -276,20 +277,20 @@ function onKeyDown(e: KeyboardEvent): void {
   if (currentMode() !== 'pixelize') return;
   const target = e.target as HTMLElement;
   if (target.matches?.('input[type="text"], input[type="number"], textarea')) return;
-  const mod = e.ctrlKey || e.metaKey;
-  const k = e.key.toLowerCase();
-  if (mod && k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
-  if (mod && k === 'y') { e.preventDefault(); redo(); return; }
-  if (mod || e.altKey || target.closest?.('.frame')) return;
+  const id = actionFor(e, 'pixelize');
+  if (!id) return;
+  const name = id.slice('pixelize.'.length);
+  if (name === 'undo' || name === 'redo') { e.preventDefault(); if (name === 'undo') undo(); else redo(); return; }
+  if (target.closest?.('.frame')) return;
   // the result view only shows on these steps, and the tools only on "Touch up"
   const step = currentStep();
   if (!['grid', 'colors', 'clean', 'edit', 'export'].includes(step)) return;
-  const tools: Record<string, EditTool> = { h: 'pan', b: 'pencil', e: 'eraser', g: 'fill', i: 'picker' };
-  if (tools[k]) { if (step === 'edit') setTool(tools[k]); }
-  else if (k === '+' || k === '=') zoomStep(1);
-  else if (k === '-') zoomStep(-1);
-  else if (k === '0') refit();
-  else if (e.key === ' ' && stageEl?.matches(':hover')) {
+  const tools: Record<string, EditTool> = { pan: 'pan', pencil: 'pencil', eraser: 'eraser', fill: 'fill', picker: 'picker' };
+  if (tools[name]) { if (step === 'edit') setTool(tools[name]); }
+  else if (name === 'zoomIn') zoomStep(1);
+  else if (name === 'zoomOut') zoomStep(-1);
+  else if (name === 'fit') refit();
+  else if (name === 'panHold' && stageEl?.matches(':hover')) {
     e.preventDefault();
     if (!spaceHeld) { spaceHeld = true; updateStageClasses(); draw(); }
   }
@@ -319,7 +320,9 @@ export function attachEditor(stage: HTMLElement, cv: HTMLCanvasElement): () => v
   cv.addEventListener('wheel', wheel, { passive: false });
   const scheme = matchMedia('(prefers-color-scheme: dark)');
   scheme.addEventListener('change', draw);
+  window.addEventListener('themechange', draw);
   return () => {
+    window.removeEventListener('themechange', draw);
     ro.disconnect();
     scheme.removeEventListener('change', draw);
     cv.removeEventListener('pointerdown', onPointerDown);
@@ -345,6 +348,6 @@ export function initEditor(): void {
   });
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('keyup', (e) => {
-    if (e.key === ' ' && spaceHeld && currentMode() === 'pixelize') { spaceHeld = false; updateStageClasses(); draw(); }
+    if (spaceHeld && releases(e, 'pixelize.panHold')) { spaceHeld = false; updateStageClasses(); draw(); }
   });
 }

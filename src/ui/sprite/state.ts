@@ -13,6 +13,7 @@
 //   hover     the pixel under the pointer changed (position read-out)
 //   palette   the user's palette changed
 //   playback  the preview started or stopped playing
+//   playframe the playing preview moved to another frame
 
 import {
   blit, clearMasked, extract, floatingMask, renderFloating, type Bitmap, type Floating, type Mask,
@@ -21,7 +22,7 @@ import type { RGB, RGBA } from '../../core/color';
 import { cloneDoc, createDoc, type SpriteDoc } from '../../core/sprite';
 import { createBus } from '../bus';
 
-export type SpEvent = 'pixels' | 'structure' | 'cursor' | 'selection' | 'color' | 'tool' | 'paper' | 'view' | 'hover' | 'palette' | 'playback';
+export type SpEvent = 'pixels' | 'structure' | 'cursor' | 'selection' | 'color' | 'tool' | 'paper' | 'view' | 'hover' | 'palette' | 'playback' | 'playframe';
 export type Tool = 'pan' | 'pencil' | 'eraser' | 'line' | 'bucket' | 'picker' | 'rect' | 'ellipse' | 'select' | 'wand' | 'move' | 'canvas';
 
 /** A floating piece also remembers its layer, frame, and the cel before it was lifted (for undo). */
@@ -59,8 +60,24 @@ export const sp = {
   gridW: 1,
   gridH: 1,
   onion: false,
-  /** the animated preview is playing */
+  /** onion skin: how many frames behind and ahead, how strong, tinted red/blue or not */
+  onionBefore: 1,
+  onionAfter: 0,
+  onionOpacity: 0.35,
+  onionTint: true,
+  /** the animated preview is playing, and the frame it shows */
   playing: false,
+  playFrame: 0,
+  /** quick flip: while held, the canvas shows this frame instead */
+  peek: null as number | null,
+  /** frames picked with Shift+click in the timeline (both ends included) */
+  range: null as [number, number] | null,
+  /** the tag whose settings are open in the timeline */
+  editingTag: null as number | null,
+  /** the floating preview window */
+  previewOpen: false,
+  previewScale: 2,
+  previewBg: 'checker' as 'checker' | 'paper' | 'image',
   /** the current layer's cel with a shape still being dragged out (rectangle tool) */
   preview: null as Bitmap | null,
   name: 'sprite',
@@ -114,6 +131,8 @@ function apply(e: Entry): void {
     sp.layer = e.layer;
   } else {
     sp.doc = e.doc;
+    sp.range = null;
+    sp.editingTag = null;
     sp.frame = Math.min(e.frame, e.doc.frames.length - 1);
     sp.layer = Math.min(e.layer, e.doc.layers.length - 1);
   }
@@ -199,6 +218,8 @@ export function liveCel(): Bitmap | null {
 
 export function setDoc(doc: SpriteDoc, name = sp.name): void {
   sp.floating = null;
+  sp.range = null;
+  sp.editingTag = null;
   sp.doc = doc;
   sp.frame = 0;
   sp.layer = Math.min(sp.layer, doc.layers.length - 1);

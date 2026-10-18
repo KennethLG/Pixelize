@@ -5,8 +5,8 @@ import {
   snapAngle, stamp, type Bitmap,
 } from '../src/core/bitmap';
 import {
-  addFrame, addLayer, composite, createDoc, cropCanvas, duplicateFrame, mergeDown, moveFrame, moveLayer, parseDoc,
-  removeLayer, resizeCanvas, scaleDoc, serializeDoc, usedColors,
+  addFrame, addLayer, addTag, composite, createDoc, cropCanvas, duplicateFrame, mergeDown, mirrorFrames, moveFrame, moveLayer, parseDoc,
+  removeFrame, removeLayer, resizeCanvas, scaleDoc, serializeDoc, tagAt, translateBitmap, usedColors, type SpriteDoc,
 } from '../src/core/sprite';
 import type { RGBA } from '../src/core/color';
 
@@ -314,6 +314,66 @@ describe('sprite document', () => {
     expect(usedColors(d)).toEqual([]);
     expect(parseDoc(serializeDoc(d))!.layers[1].ref).toBe(true);
     expect(parseDoc(serializeDoc(d))!.layers[0].ref).toBeUndefined();
+  });
+
+  it('tags follow their frames', () => {
+    const d = createDoc(2, 2);
+    for (let i = 0; i < 5; i++) addFrame(d, d.frames.length);   // 6 frames
+    const t = addTag(d, 1, 3, 'walk');
+    const span = () => [t.from, t.to];
+    addFrame(d, 0); expect(span()).toEqual([2, 4]);              // before: shifts
+    addFrame(d, 3); expect(span()).toEqual([2, 5]);              // inside: grows
+    addFrame(d, 6); expect(span()).toEqual([2, 5]);              // right after: unchanged
+    duplicateFrame(d, 5); expect(span()).toEqual([2, 6]);        // copy of its last frame joins it
+    removeFrame(d, 2); expect(span()).toEqual([2, 5]);
+    expect(tagAt(d, 4)?.name).toBe('walk');
+    expect(tagAt(d, 0)).toBeNull();
+  });
+
+  it('a tag disappears with its last frame, and moves with its frames', () => {
+    const d = createDoc(2, 2);
+    for (let i = 0; i < 3; i++) addFrame(d, d.frames.length);   // 4 frames
+    addTag(d, 3, 3, 'one');
+    moveFrame(d, 3, 0);
+    expect([d.tags[0].from, d.tags[0].to]).toEqual([0, 0]);
+    moveFrame(d, 1, 3);                                          // another frame moving past it does not change it
+    expect([d.tags[0].from, d.tags[0].to]).toEqual([0, 0]);
+    removeFrame(d, 0);
+    expect(d.tags).toHaveLength(0);
+  });
+
+  it('mirror adds flipped copies, with their own tag', () => {
+    const d = createDoc(3, 1);
+    addFrame(d, 1);
+    stamp(d.frames[0].cels[0], 0, 0, 1, RED);
+    stamp(d.frames[1].cels[0], 1, 0, 1, BLUE);
+    addTag(d, 0, 1, 'walk');
+    expect(mirrorFrames(d, 0, 1)).toEqual([2, 3]);
+    expect(getPixel(d.frames[2].cels[0], 2, 0)).toEqual(RED);
+    expect(getPixel(d.frames[3].cels[0], 1, 0)).toEqual(BLUE);
+    expect(d.tags.map((t) => [t.name, t.from, t.to])).toEqual([['walk', 0, 1], ['walk mirrored', 2, 3]]);
+  });
+
+  it('translate moves a cel and cuts what leaves the canvas', () => {
+    const b = newBitmap(3, 3);
+    plot(b, 0, 0, RED);
+    plot(b, 2, 2, BLUE);
+    const m = translateBitmap(b, 1, 1);
+    expect(getPixel(m, 1, 1)).toEqual(RED);
+    expect(count(m)).toBe(1);
+  });
+
+  it('tags are saved, and broken ones are dropped on load', () => {
+    const d: SpriteDoc = createDoc(2, 2);
+    addFrame(d, 1);
+    addTag(d, 0, 1, 'idle').dir = 'pingpong';
+    const back = parseDoc(serializeDoc(d))!;
+    expect(back.tags).toEqual([{ name: 'idle', from: 0, to: 1, dir: 'pingpong', color: d.tags[0].color }]);
+    const raw = JSON.parse(serializeDoc(d));
+    raw.tags.push({ name: 'bad', from: 5, to: 9 });
+    expect(parseDoc(JSON.stringify(raw))!.tags).toHaveLength(1);
+    delete raw.tags;
+    expect(parseDoc(JSON.stringify(raw))!.tags).toEqual([]);
   });
 
   it('colors in use and saving round trip', () => {

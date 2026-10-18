@@ -1,23 +1,29 @@
 // The sprite document: a canvas size, layers (bottom first) and frames. Each
 // frame holds one cel (a bitmap) per layer, in the same order as `layers`.
 
-import { newBitmap, scaleNearest, type Bitmap } from './bitmap';
+import { flip, newBitmap, scaleNearest, type Bitmap } from './bitmap';
+import type { Direction } from './frames';
 
 /** A reference layer is shown while drawing but left out of exports and of the colors in use. */
 export interface Layer { name: string; visible: boolean; opacity: number; ref?: boolean }
 export interface Frame { cels: Bitmap[]; duration: number }
-export interface SpriteDoc { w: number; h: number; layers: Layer[]; frames: Frame[] }
+/** A named run of frames (idle, walk…) with its own playback direction. `from`/`to` are frame indices, both included. */
+export interface Tag { name: string; from: number; to: number; dir: Direction; color: string }
+export interface SpriteDoc { w: number; h: number; layers: Layer[]; frames: Frame[]; tags: Tag[] }
+
+export const TAG_COLORS = ['#d9732b', '#3f9a6a', '#4a7fd6', '#b0479d', '#c9a227', '#3fa3b8'];
 
 export const DEFAULT_DURATION = 100; // ms
 
 export function createDoc(w: number, h: number): SpriteDoc {
-  return { w, h, layers: [{ name: 'Layer 1', visible: true, opacity: 1 }], frames: [{ cels: [newBitmap(w, h)], duration: DEFAULT_DURATION }] };
+  return { w, h, layers: [{ name: 'Layer 1', visible: true, opacity: 1 }], frames: [{ cels: [newBitmap(w, h)], duration: DEFAULT_DURATION }], tags: [] };
 }
 
 export const cloneDoc = (d: SpriteDoc): SpriteDoc => ({
   w: d.w, h: d.h,
   layers: d.layers.map((l) => ({ ...l })),
   frames: d.frames.map((f) => ({ duration: f.duration, cels: f.cels.map((c) => ({ w: c.w, h: c.h, px: c.px.slice() })) })),
+  tags: (d.tags || []).map((t) => ({ ...t })),
 });
 
 const move = <T>(arr: T[], from: number, to: number) => { const [x] = arr.splice(from, 1); arr.splice(to, 0, x); };
@@ -67,23 +73,98 @@ export function mergeDown(d: SpriteDoc, i: number): boolean {
 }
 
 // ---------- frames ----------
+// Tags follow their frames: inserting inside a tag grows it, removing shrinks it.
+
+/** Tags after inserting a frame at index `at`. */
+function tagsInsert(d: SpriteDoc, at: number): void {
+  for (const t of d.tags) {
+    if (at <= t.from) { t.from++; t.to++; }
+    else if (at <= t.to) t.to++;
+  }
+}
 
 export function addFrame(d: SpriteDoc, at: number): void {
   d.frames.splice(at, 0, { cels: d.layers.map(() => newBitmap(d.w, d.h)), duration: d.frames[Math.max(0, at - 1)]?.duration ?? DEFAULT_DURATION });
+  tagsInsert(d, at);
 }
 
 export function duplicateFrame(d: SpriteDoc, i: number): void {
   const f = d.frames[i];
   d.frames.splice(i + 1, 0, { duration: f.duration, cels: f.cels.map((c) => ({ w: c.w, h: c.h, px: c.px.slice() })) });
+  // the copy belongs to the same tags as its original
+  for (const t of d.tags) {
+    if (t.from > i) t.from++;
+    if (t.to >= i) t.to++;
+  }
 }
 
 export function removeFrame(d: SpriteDoc, i: number): boolean {
   if (d.frames.length < 2) return false;
   d.frames.splice(i, 1);
+  d.tags = d.tags.filter((t) => {
+    if (t.from > i) t.from--;
+    if (t.to >= i) t.to--;
+    return t.to >= t.from;
+  });
   return true;
 }
 
-export const moveFrame = (d: SpriteDoc, from: number, to: number) => { if (from !== to) move(d.frames, from, to); };
+export function moveFrame(d: SpriteDoc, from: number, to: number): void {
+  if (from === to) return;
+  move(d.frames, from, to);
+  // where the frame that was at index k is now
+  const map = (k: number) => {
+    if (k === from) return to;
+    if (from < to && k > from && k <= to) return k - 1;
+    if (from > to && k >= to && k < from) return k + 1;
+    return k;
+  };
+  for (const t of d.tags) {
+    const a = map(t.from), b = map(t.to);
+    t.from = Math.min(a, b);
+    t.to = Math.max(a, b);
+  }
+}
+
+/** The tag that frame `fi` belongs to (the first one, when tags overlap). */
+export const tagAt = (d: SpriteDoc, fi: number): Tag | null => d.tags.find((t) => fi >= t.from && fi <= t.to) ?? null;
+
+export function addTag(d: SpriteDoc, from: number, to: number, name?: string): Tag {
+  const t: Tag = { name: name || `Tag ${d.tags.length + 1}`, from: Math.min(from, to), to: Math.max(from, to), dir: 'forward', color: TAG_COLORS[d.tags.length % TAG_COLORS.length] };
+  d.tags.push(t);
+  return t;
+}
+
+/**
+ * Adds left/right mirrored copies of frames `from`–`to` after the last
+ * frame (a walk to the right becomes a walk to the left). When the range is
+ * exactly a tag, the copies get their own tag. Returns the new frames' range.
+ */
+export function mirrorFrames(d: SpriteDoc, from: number, to: number): [number, number] {
+  const start = d.frames.length;
+  for (let i = from; i <= to; i++) {
+    const f = d.frames[i];
+    d.frames.push({ duration: f.duration, cels: f.cels.map((c) => flip(c, true)) });
+  }
+  const end = d.frames.length - 1;
+  const tag = d.tags.find((t) => t.from === from && t.to === to);
+  if (tag) d.tags.push({ ...tag, name: `${tag.name} mirrored`, from: start, to: end, color: TAG_COLORS[d.tags.length % TAG_COLORS.length] });
+  return [start, end];
+}
+
+/** A cel moved by dx, dy pixels; what leaves the canvas is cut. */
+export function translateBitmap(b: Bitmap, dx: number, dy: number): Bitmap {
+  const out = newBitmap(b.w, b.h);
+  for (let y = 0; y < b.h; y++) {
+    const Y = y + dy;
+    if (Y < 0 || Y >= b.h) continue;
+    for (let x = 0; x < b.w; x++) {
+      const X = x + dx;
+      if (X >= 0 && X < b.w) out.px.set(b.px.subarray((y * b.w + x) * 4, (y * b.w + x) * 4 + 4), (Y * b.w + X) * 4);
+    }
+  }
+  return out;
+}
 
 // ---------- canvas size ----------
 
@@ -172,7 +253,7 @@ export function usedColors(d: SpriteDoc): number[] {
 
 // ---------- saving (autosave and project files) ----------
 
-interface SavedDoc { v: 1; w: number; h: number; layers: Layer[]; frames: { duration: number; cels: string[] }[] }
+interface SavedDoc { v: 1; w: number; h: number; layers: Layer[]; frames: { duration: number; cels: string[] }[]; tags?: Tag[] }
 
 const toB64 = (px: Uint8ClampedArray) => {
   let s = '';
@@ -182,8 +263,18 @@ const toB64 = (px: Uint8ClampedArray) => {
 const fromB64 = (s: string) => Uint8ClampedArray.from(atob(s), (ch) => ch.charCodeAt(0));
 
 export function serializeDoc(d: SpriteDoc): string {
-  const saved: SavedDoc = { v: 1, w: d.w, h: d.h, layers: d.layers, frames: d.frames.map((f) => ({ duration: f.duration, cels: f.cels.map((c) => toB64(c.px)) })) };
+  const saved: SavedDoc = { v: 1, w: d.w, h: d.h, layers: d.layers, frames: d.frames.map((f) => ({ duration: f.duration, cels: f.cels.map((c) => toB64(c.px)) })), tags: d.tags };
   return JSON.stringify(saved);
+}
+
+const DIRS: Direction[] = ['forward', 'reverse', 'pingpong'];
+function parseTags(tags: unknown, n: number): Tag[] {
+  if (!Array.isArray(tags)) return [];
+  return tags.flatMap((t: Partial<Tag>) => {
+    const from = Math.max(0, Math.round(Number(t.from))), to = Math.min(n - 1, Math.round(Number(t.to)));
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return [];
+    return [{ name: String(t.name ?? 'Tag'), from, to, dir: DIRS.includes(t.dir as Direction) ? t.dir as Direction : 'forward', color: /^#[0-9a-f]{6}$/i.test(String(t.color)) ? String(t.color) : TAG_COLORS[0] }];
+  });
 }
 
 export function parseDoc(text: string): SpriteDoc | null {
@@ -198,7 +289,7 @@ export function parseDoc(text: string): SpriteDoc | null {
         return { w: s.w, h: s.h, px: px.length === size ? px : new Uint8ClampedArray(size) };
       }),
     }));
-    return { w: s.w, h: s.h, layers: s.layers.map((l) => ({ name: String(l.name), visible: l.visible !== false, opacity: Number.isFinite(+l.opacity) ? Math.max(0, Math.min(1, +l.opacity)) : 1, ...(l.ref ? { ref: true } : {}) })), frames };
+    return { w: s.w, h: s.h, layers: s.layers.map((l) => ({ name: String(l.name), visible: l.visible !== false, opacity: Number.isFinite(+l.opacity) ? Math.max(0, Math.min(1, +l.opacity)) : 1, ...(l.ref ? { ref: true } : {}) })), frames, tags: parseTags(s.tags, frames.length) };
   } catch {
     return null;
   }

@@ -8,6 +8,7 @@ import { CanvasPanel } from './CanvasPanel';
 import { ColorPanel } from './ColorPanel';
 import { LayersPanel } from './LayersPanel';
 import { Palettes } from './Palettes';
+import { PreviewWindow } from './PreviewWindow';
 import { Timeline } from './Timeline';
 import { ToolBar } from './ToolBar';
 import { ToolOptions } from './ToolOptions';
@@ -32,6 +33,7 @@ export function SpriteEditor() {
         </aside>
       </div>
       <Timeline />
+      <PreviewWindow />
     </div>
   );
 }
