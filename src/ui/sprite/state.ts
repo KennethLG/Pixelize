@@ -25,7 +25,9 @@ import { placeFloating } from '../../core/rotsprite';
 import { cloneDoc, createDoc, type SpriteDoc } from '../../core/sprite';
 import { createBus } from '../bus';
 
-export type SpEvent = 'pixels' | 'structure' | 'cursor' | 'selection' | 'color' | 'tool' | 'paper' | 'view' | 'hover' | 'palette' | 'playback' | 'playframe';
+export type SpEvent = 'pixels' | 'structure' | 'cursor' | 'selection' | 'color' | 'tool' | 'paper' | 'view' | 'hover' | 'palette' | 'playback' | 'playframe' | 'recent' | 'tabs';
+/** the windows the editor opens over everything (one at a time) */
+export type SpDialog = 'export' | 'gmopen' | 'new' | 'canvas';
 export type Tool = 'pan' | 'pencil' | 'eraser' | 'line' | 'shade' | 'bucket' | 'picker' | 'rect' | 'ellipse' | 'select' | 'lasso' | 'wand' | 'move' | 'pose' | 'canvas';
 
 /** A floating piece also remembers its layer, frame, and the cel before it was lifted (for undo). */
@@ -86,9 +88,12 @@ export const sp = {
   /** the Variants panel, and the variant shown on the canvas (only on screen) */
   variantsOpen: false,
   showVariant: null as number | null,
-  /** the Export window, and the Open from GameMaker window */
-  exportOpen: false,
-  gmOpen: false,
+  /** the window open over the editor */
+  dialog: null as SpDialog | null,
+  /** the format the Export window starts on, when a menu asked for one */
+  exportAs: null as 'png' | 'strip' | 'gif' | 'gamemaker' | null,
+  /** the .pixelize file this document was opened from or saved to (Save writes there) */
+  fileHandle: null as FileSystemFileHandle | null,
   /** the GameMaker sprite this document was opened from (Export sends it back there) */
   gmName: null as string | null,
   /** the floating preview window */
@@ -118,10 +123,13 @@ type Entry =
 const LIMIT = 100;
 let undoStack: Entry[] = [];
 let redoStack: Entry[] = [];
+/** counts every change, undo and redo of the open document (a tab is modified while it differs from the count at its last save) */
+let edits = 0;
 
 function record(stack: Entry[], e: Entry): void {
   stack.push(e);
   if (stack.length > LIMIT) stack.shift();
+  edits++;
 }
 
 /** Call before changing the pixels of one cel. `px` is the cel as it was, when the caller already changed it. */
@@ -178,7 +186,13 @@ export const undo = () => step(undoStack, redoStack);
 export const redo = () => step(redoStack, undoStack);
 export const canUndo = () => undoStack.length > 0 || !!sp.floating;
 export const canRedo = () => redoStack.length > 0;
-export function resetHistory(): void { undoStack = []; redoStack = []; }
+export function resetHistory(): void { undoStack = []; redoStack = []; edits = 0; }
+
+/** The undo history of the open document, kept by its tab while another one is open. */
+export interface History { undo: Entry[]; redo: Entry[]; edits: number }
+export const takeHistory = (): History => ({ undo: undoStack, redo: redoStack, edits });
+export function putHistory(h: History): void { undoStack = h.undo; redoStack = h.redo; edits = h.edits; }
+export const editCount = () => edits;
 
 // ---------- selection and the floating piece ----------
 
@@ -273,8 +287,21 @@ export function setDoc(doc: SpriteDoc, name = sp.name): void {
   sp.pivotAt = null;
   sp.name = name;
   sp.gmName = null;
+  sp.fileHandle = null;
   resetHistory();
   emit('structure', 'cursor', 'pixels', 'selection');
+}
+
+export function openDialog(d: SpDialog): void {
+  commitFloating();
+  sp.dialog = d;
+  emit('view');
+}
+
+export function closeDialog(): void {
+  sp.dialog = null;
+  sp.exportAs = null;
+  emit('view');
 }
 
 export function setFrame(i: number): void {

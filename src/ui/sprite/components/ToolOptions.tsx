@@ -3,10 +3,10 @@
 
 import { carryFloating, commitFloating, deselect, sp } from '../state';
 import {
-  bakeLayerPart, deleteSelection, freePose, makeLayerPart, outlineArt, removeOutlineArt, resetPivot, restPose, selectionToLayer, setAngle, setBrush, setLayerParent, setOption, transform,
+  bakeLayerPart, deleteSelection, freePose, makeLayerPart, resetPivot, restPose, selectionToLayer, setAngle, setBrush, setLayerParent, setOption, transform,
 } from '../actions';
 import { parentChoices, partOf, poseOf } from '../../../core/parts';
-import { selectAll, selectionBox } from '../canvas';
+import { selectionBox } from '../canvas';
 import { copy, cut } from '../io';
 import { useSp } from '../hooks';
 import { keyLabel } from '../../keys';
@@ -155,9 +155,6 @@ export function ToolOptions() {
       {t === 'pose' && <PoseOptions />}
       {!hasSelection && HINTS[t] && <span className="hint">{HINTS[t]}</span>}
       {hasSelection && <SelectionActions />}
-      <button type="button" className="ghost small sp-selall" title={'Outline the art on this layer (or the selected art) with the primary color.\nShift+click: fill the diagonal corners too.'} onClick={(e) => outlineArt(e.shiftKey)}>Outline</button>
-      <button type="button" className="ghost small" title={'Remove the dark outline of the art on this layer (or the selected art) and fill it with the colors next to it.\nLines inside one part (eyes, mouths) stay.\nShift+click: drop the silhouette outline instead (the art gets 1 px smaller).'} onClick={(e) => removeOutlineArt(e.shiftKey)}>Remove outline</button>
-      <button type="button" className="ghost small" title="Select all (Ctrl+A)" onClick={selectAll}>Select all</button>
     </div>
   );
 }

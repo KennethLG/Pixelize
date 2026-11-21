@@ -5,18 +5,15 @@
 // layers into the editor.
 
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { setStatus } from '../../dom';
+import { notify, setStatus } from '../../dom';
 import { clearCache, indexProject, loadGmSprite, type Indexer, type LibEntry } from '../gmLibrary';
 import { MAX_SIDE } from '../io';
-import { commitFloating, emit, setDoc, sp } from '../state';
+import { rememberGmSprite } from '../files';
+import { closeDialog, sp } from '../state';
+import { findTab, openDoc, switchTab } from '../tabs';
 import { GmProjectBox, useGmProject } from './GmProjectBox';
 
-export function closeGmOpen(): void {
-  sp.gmOpen = false;
-  emit('view');
-}
-
-const isBlank = () => sp.doc.frames.every((f) => f.cels.every((c) => !c.px.some((v, i) => i % 4 === 3 && v)));
+export const closeGmOpen = closeDialog;
 
 /** Object URLs for the thumbnails, kept while the page lives so reopening the window does not make new ones. */
 const urls = new WeakMap<Blob, string>();
@@ -89,14 +86,15 @@ export function GmOpenDialog() {
     if (!project || opening) return;
     const e = entries.find((x) => x.name === name);
     if (e?.error) { setStatus(`${name}: ${e.error}`, true); return; }
-    commitFloating();
-    if (!isBlank() && !confirm(`Replace the sprite in the editor with ${name}? Save it first if you need it.`)) return;
+    // already open: go to its tab
+    const open = findTab((t) => t.gmName === name);
+    if (open >= 0) { switchTab(open); closeGmOpen(); return; }
     setOpening(true);
     loadGmSprite(project, name, MAX_SIDE).then((doc) => {
-      setDoc(doc, name);
-      sp.gmName = name;
+      openDoc(doc, name, { gmName: name });
+      rememberGmSprite(name, project.name, project.dir);
       closeGmOpen();
-      setStatus(`Opened ${name} from ${project.name}: ${doc.frames.length} frame${doc.frames.length === 1 ? '' : 's'}, ${doc.layers.length} layer${doc.layers.length === 1 ? '' : 's'}. Export sends it back to the same sprite.`);
+      notify(`Opened ${name}`, `from ${project.name}: ${doc.frames.length} frame${doc.frames.length === 1 ? '' : 's'}, ${doc.layers.length} layer${doc.layers.length === 1 ? '' : 's'}. Export sends it back to the same sprite.`);
     }, (err) => setStatus((err as Error).message, true)).finally(() => setOpening(false));
   };
 

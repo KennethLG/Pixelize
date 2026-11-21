@@ -2,11 +2,11 @@
 // frame numbers, frame and cel buttons, and the small animated preview.
 
 import { memo, useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
-import { DEFAULT_DURATION, TAG_COLORS, composite, moveFrame, removeFrame } from '../../../core/sprite';
+import { DEFAULT_DURATION, TAG_COLORS, composite } from '../../../core/sprite';
 import { NumberField, Seg } from '../../components/common';
 import { useReorder } from '../../components/useReorder';
 import {
-  copyCel, mirrorSelection, newFrame, pasteCel, pickFrame, removeTag, selectTag, selectedFrames, tagSelection, togglePlay, updateTag,
+  deleteFrame, moveFrameTo, newFrame, pickFrame, removeTag, selectTag, selectedFrames, tagSelection, togglePlay, updateTag,
 } from '../animation';
 import { useSp } from '../hooks';
 import { emit, pushDoc, setFrame, setLayer, sp, versions } from '../state';
@@ -33,14 +33,7 @@ const CelThumb = memo(function CelThumb(props: { frame: number; layer: number; s
   return <canvas ref={ref} />;
 });
 
-function moveTo(from: number, to: number): void {
-  if (to < 0 || to >= sp.doc.frames.length || from === to) return;
-  pushDoc();
-  moveFrame(sp.doc, from, to);
-  sp.frame = to;
-  sp.range = null;
-  emit('structure', 'cursor', 'pixels');
-}
+const moveTo = moveFrameTo;
 
 function Preview() {
   useSp('playback', 'playframe', 'cursor', 'pixels', 'structure', 'view');
@@ -168,13 +161,7 @@ export function Timeline() {
           <button type="button" className="ghost small" title="Copy of this frame (Shift+N)" onClick={() => newFrame(true)}>Duplicate</button>
           <button type="button" className="ghost small" aria-label="Move frame earlier" disabled={sp.frame < 1} onClick={() => moveTo(sp.frame, sp.frame - 1)}>◀</button>
           <button type="button" className="ghost small" aria-label="Move frame later" disabled={sp.frame >= n - 1} onClick={() => moveTo(sp.frame, sp.frame + 1)}>▶</button>
-          <button
-            type="button"
-            className="ghost small"
-            title="Delete this frame"
-            disabled={n < 2}
-            onClick={() => { pushDoc(); if (removeFrame(sp.doc, sp.frame)) { sp.frame = Math.min(sp.frame, sp.doc.frames.length - 1); sp.range = null; emit('structure', 'cursor', 'pixels'); } }}
-          >Delete</button>
+          <button type="button" className="ghost small" title="Delete this frame" disabled={n < 2} onClick={deleteFrame}>Delete</button>
           <span className="muted">Duration</span>
           <NumberField
             value={frames[sp.frame].duration}
@@ -199,10 +186,7 @@ export function Timeline() {
             onClick={() => { const d = frames[sp.frame].duration; pushDoc(); for (const fr of sp.doc.frames) fr.duration = d; emit('structure'); }}
           >All</button>
           <span className="sp-tl-sep" />
-          <button type="button" className="ghost small" title="Copy this cel (Shift+C)" onClick={copyCel}>Copy cel</button>
-          <button type="button" className="ghost small" title="Paste into this cel, or into every selected frame (Shift+V)" onClick={pasteCel}>Paste cel</button>
-          <button type="button" className="ghost small" title="Tag the selected frames (Shift+click frames to select several)" onClick={tagSelection}>+ Tag</button>
-          <button type="button" className="ghost small" title="Add left/right mirrored copies of the selected frames (or of this frame's tag) at the end" onClick={mirrorSelection}>Mirror</button>
+          <button type="button" className="ghost small" title={'Tag the selected frames (Shift+click frames to select several).\nCopy cel, Paste cel and Mirror are in the Frame menu.'} onClick={tagSelection}>+ Tag</button>
         </div>
       </div>
     </div>

@@ -14,7 +14,7 @@ import {
 } from '../exportPlan';
 import { canPickFolders, readSprite } from '../gmProject';
 import { GmProjectBox, useGmProject } from './GmProjectBox';
-import { emit, sp, versions } from '../state';
+import { closeDialog, sp, versions } from '../state';
 
 const ORIGIN_LABELS: Record<GmOrigin, string> = {
   'top-left': 'Top left', top: 'Top centre', 'top-right': 'Top right',
@@ -32,14 +32,11 @@ const FORMATS: { value: ExportFormat; label: string; title: string }[] = [
 /** room around the preview for the origin mark */
 const PAD = 12;
 
-export function closeExport(): void {
-  sp.exportOpen = false;
-  emit('view');
-}
+export const closeExport = closeDialog;
 
 export function ExportDialog() {
   useSp('view', 'structure', 'pixels');
-  const [o, setO] = useState<ExportOptions>(loadOptions);
+  const [o, setO] = useState<ExportOptions>(() => ({ ...loadOptions(), ...(sp.exportAs ? { format: sp.exportAs } : {}) }));
   const [name, setName] = useState(defaultGmName);
   const [busy, setBusy] = useState(false);
   const [pick, setPick] = useState(0);
@@ -70,7 +67,7 @@ export function ExportDialog() {
   const go = () => {
     if (gm && !project) { choose(!waiting); return; }
     setBusy(true);
-    runExport(o, name, project).then(() => { if (!gm) closeExport(); }, (e) => setStatus((e as Error).message, true)).finally(() => setBusy(false));
+    runExport(o, name, project).then(closeExport, (e) => setStatus((e as Error).message, true)).finally(() => setBusy(false));
   };
 
   // Escape closes

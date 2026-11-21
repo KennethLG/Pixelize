@@ -3,7 +3,7 @@
 // file, a normal download link works.
 
 import { app } from './app';
-import { setStatus } from './dom';
+import { notify, setStatus } from './dom';
 import { settings } from './settings';
 
 interface DownloadsApi { save(req: { filename: string; data: Blob }): Promise<unknown> }
@@ -36,7 +36,7 @@ export async function saveBlob(blob: Blob, filename: string): Promise<void> {
   if (downloads) {
     try {
       await downloads.save({ filename, data: blob });
-      setStatus(`Saved ${filename}`);
+      notify(`Saved ${filename}`);
     } catch (e) {
       if ((e as { code?: string })?.code !== 'declined') setStatus("Couldn't save the file here.", true);
     }
@@ -53,7 +53,7 @@ export async function saveBlob(blob: Blob, filename: string): Promise<void> {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  setStatus(`Saved ${filename}`);
+  notify(`Saved ${filename}`);
 }
 
 export async function downloadResult(scale: number): Promise<void> {

@@ -1,5 +1,7 @@
 // Small DOM helpers shared by the UI modules.
 
+import { toast } from './toast';
+
 export function $<T extends HTMLElement = HTMLElement>(id: string): T {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Missing #${id} in the page`);
@@ -27,7 +29,8 @@ export const cssVar = (name: string) => getComputedStyle(document.documentElemen
 
 export const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-// Both modes have a status line; only the visible one is seen.
+// Both modes have a status line; only the visible one is seen. Errors also
+// show as a toast, so they are not missed.
 export function setStatus(msg: string, isError = false): void {
   for (const id of ['status', 'spStatus']) {
     const s = document.getElementById(id);
@@ -35,6 +38,13 @@ export function setStatus(msg: string, isError = false): void {
     s.textContent = msg;
     s.classList.toggle('err', isError);
   }
+  if (isError && msg) toast(msg, { kind: 'error' });
+}
+
+/** A result worth seeing (saved, exported): the status line and a toast. */
+export function notify(msg: string, detail?: string): void {
+  setStatus(detail ? `${msg} ${detail}` : msg);
+  toast(msg, { detail });
 }
 
 export const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

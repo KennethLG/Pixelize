@@ -12,11 +12,13 @@ import { PreviewWindow } from './PreviewWindow';
 import { CheckPanel } from './CheckPanel';
 import { ExportDialog } from './ExportDialog';
 import { GmOpenDialog } from './GmOpenDialog';
+import { CanvasSizeDialog, NewSpriteDialog } from './SizeDialogs';
 import { VariantsPanel } from './VariantsPanel';
 import { Timeline } from './Timeline';
 import { ToolBar } from './ToolBar';
 import { ToolOptions } from './ToolOptions';
 import { TopBar } from './TopBar';
+import { TabBar } from './TabBar';
 
 export function SpriteEditor() {
   useSp('paper', 'view');
@@ -24,6 +26,7 @@ export function SpriteEditor() {
   return (
     <div className={sp.paperMode === 'color' ? 'sp-root paper-solid' : 'sp-root'} style={{ '--paper': hex(sp.paperColor) } as CSSProperties}>
       <TopBar />
+      <TabBar />
       <div className="sp-main">
         <ToolBar />
         <div className="sp-center">
@@ -40,8 +43,10 @@ export function SpriteEditor() {
       <PreviewWindow />
       <CheckPanel />
       <VariantsPanel />
-      {sp.exportOpen && <ExportDialog />}
-      {sp.gmOpen && <GmOpenDialog />}
+      {sp.dialog === 'export' && <ExportDialog />}
+      {sp.dialog === 'gmopen' && <GmOpenDialog />}
+      {sp.dialog === 'new' && <NewSpriteDialog />}
+      {sp.dialog === 'canvas' && <CanvasSizeDialog />}
     </div>
   );
 }

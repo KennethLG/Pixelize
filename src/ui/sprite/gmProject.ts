@@ -47,7 +47,7 @@ export function db(): Promise<IDBDatabase> {
   });
 }
 
-async function remember(dir: FileSystemDirectoryHandle | null): Promise<void> {
+export async function rememberProject(dir: FileSystemDirectoryHandle | null): Promise<void> {
   try {
     const d = await db();
     const tx = d.transaction(STORE, 'readwrite');
@@ -97,7 +97,7 @@ async function findYyp(dir: FileSystemDirectoryHandle): Promise<string | null> {
   return null;
 }
 
-async function open(dir: FileSystemDirectoryHandle): Promise<GmProject> {
+export async function projectFromDir(dir: FileSystemDirectoryHandle): Promise<GmProject> {
   const yyp = await findYyp(dir);
   if (!yyp) throw new Error(`"${dir.name}" is not a GameMaker project: pick the folder that has the .yyp file.`);
   const text = (await readText(dir, yyp))!;
@@ -116,8 +116,8 @@ async function open(dir: FileSystemDirectoryHandle): Promise<GmProject> {
 export async function pickProject(): Promise<GmProject> {
   if (!window.showDirectoryPicker) throw new Error('This browser cannot write to folders. Use the desktop app, Chrome or Edge.');
   const dir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'gm-project' });
-  const p = await open(dir);
-  await remember(dir);
+  const p = await projectFromDir(dir);
+  await rememberProject(dir);
   return p;
 }
 
@@ -132,7 +132,7 @@ export async function rememberedProject(ask: boolean): Promise<GmProject | null>
   let perm: Perm = (await h.queryPermission?.({ mode: 'readwrite' })) ?? 'granted';
   if (perm === 'prompt' && ask) perm = (await h.requestPermission?.({ mode: 'readwrite' })) ?? 'denied';
   if (perm !== 'granted') return null;
-  try { return await open(dir); } catch { await remember(null); return null; }
+  try { return await projectFromDir(dir); } catch { await rememberProject(null); return null; }
 }
 
 /** The name of the remembered folder, even without access to it yet. */
@@ -140,7 +140,7 @@ export async function rememberedName(): Promise<string | null> {
   return (await recall())?.name ?? null;
 }
 
-export const forgetProject = () => remember(null);
+export const forgetProject = () => rememberProject(null);
 
 /** The parsed .yy of a sprite of the project, or null when it has none of that name. */
 export async function readSprite(p: GmProject, name: string): Promise<any | null> {

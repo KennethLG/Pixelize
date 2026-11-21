@@ -6,8 +6,10 @@ import { actionFor, releases } from '../keys';
 import { deleteSelection, selectionToLayer, setAngle, setBrush, swapColors } from './actions';
 import { copyCel, endPeek, newFrame, pasteCel, shiftFrame, startPeek, togglePlay } from './animation';
 import { fitView, nudge, selectAll, setSpaceHeld, zoomStep } from './canvas';
-import { copy, cut } from './io';
-import { carryFloating, commitFloating, deselect, emit, pickOnce, redo, setFrame, setTool, sp, undo, type Tool } from './state';
+import { copy, cut, pasteFromClipboard } from './io';
+import { carryFloating, commitFloating, deselect, emit, openDialog, pickOnce, redo, setFrame, setTool, sp, undo, type Tool } from './state';
+import { openFileDialog, save, saveAs } from './files';
+import { closeTab, nextTab, prevTab } from './tabs';
 
 const TOOLS: Tool[] = ['pencil', 'eraser', 'line', 'shade', 'bucket', 'rect', 'ellipse', 'picker', 'select', 'lasso', 'wand', 'move', 'pose', 'canvas', 'pan'];
 
@@ -23,8 +25,14 @@ const RUN: Record<string, () => void> = {
   brushUp: () => setBrush(sp.brush + 1),
   undo, redo, copy, cut, selectAll, deselect,
   delete: deleteSelection,
-  export: () => { sp.exportOpen = true; emit('view'); },
-  openGm: () => { sp.gmOpen = true; emit('view'); },
+  export: () => openDialog('export'),
+  openGm: () => openDialog('gmopen'),
+  newSprite: () => openDialog('new'),
+  open: openFileDialog,
+  save, saveAs,
+  paste: pasteFromClipboard,
+  closeTab: () => closeTab(),
+  nextTab, prevTab,
   toLayer: () => selectionToLayer(false),
   copyToLayer: () => selectionToLayer(true),
   apply: () => { if (sp.floating) commitFloating(); },
@@ -46,11 +54,18 @@ const RUN: Record<string, () => void> = {
   movePrev: () => carryFloating(sp.frame - 1, false),
 };
 
+/** Runs a sprite editor action by its id (without the "sprite." part), for the menus. */
+export function runAction(name: string): void {
+  if ((TOOLS as string[]).includes(name)) { setTool(name as Tool); return; }
+  if (name === 'picker') { pickOnce(); return; }
+  RUN[name]?.();
+}
+
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
 function onKeyDown(e: KeyboardEvent): void {
   // the Export window takes the keyboard while it is open
-  if (sp.exportOpen || sp.gmOpen) return;
+  if (sp.dialog) return;
   const t = e.target as HTMLElement;
   if (t.matches?.('input[type="text"], input[type="number"], textarea')) return;
   const d = ARROWS[e.key];
@@ -74,6 +89,7 @@ function onKeyDown(e: KeyboardEvent): void {
     return;
   }
   if (name === 'peek') { e.preventDefault(); if (!e.repeat) startPeek(); return; }
+  if (name === 'paste') return;
   e.preventDefault();
   if (name === 'picker') { pickOnce(); return; }
   if ((TOOLS as string[]).includes(name)) { setTool(name as Tool); return; }
