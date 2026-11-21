@@ -5,6 +5,7 @@ import { draw } from './canvas';
 import { initIo, restore } from './io';
 import { loadPrefs } from './prefs';
 import { initShortcuts } from './shortcuts';
+import { loadRecent } from './files';
 import { sp } from './state';
 
 export function initSprite(isActive: () => boolean): void {
@@ -12,6 +13,7 @@ export function initSprite(isActive: () => boolean): void {
   restore();
   initIo(isActive);
   initShortcuts(isActive);
+  loadRecent();
 }
 
 /** The editor state, for checks from the browser console. */

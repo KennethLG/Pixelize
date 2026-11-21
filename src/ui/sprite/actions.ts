@@ -4,7 +4,7 @@ import {
   blit, clearMasked, extract, flip, floatingMask, newBitmap, outline, rotate90, scaleNearest, type Bitmap,
 } from '../../core/bitmap';
 import type { RGBA } from '../../core/color';
-import { addLayer, cloneDoc } from '../../core/sprite';
+import { addLayer, cloneDoc, duplicateLayer, mergeDown, moveLayer, removeLayer } from '../../core/sprite';
 import { bakePart, freeFrame, makePart, REST, setParent, setPose, syncParts } from '../../core/parts';
 import { placeFloating } from '../../core/rotsprite';
 import { removeOutline } from '../../core/unoutline';
@@ -230,6 +230,62 @@ export function toggleReference(i: number): void {
   if (l.ref) delete l.ref;
   else l.ref = true;
   emit('structure', 'pixels');
+}
+
+// ---------- layers (the panel and the Layer menu) ----------
+
+/** A change to the layers with undo; `fn` returns false when nothing changed. */
+function layerChange(fn: () => boolean | void, then: () => void): void {
+  pushDoc();
+  if (fn() === false) return;
+  then();
+  emit('structure', 'cursor', 'pixels');
+}
+
+export const newLayer = () => layerChange(() => addLayer(sp.doc, sp.layer + 1), () => { sp.layer++; });
+export const duplicateCurrentLayer = () => layerChange(() => duplicateLayer(sp.doc, sp.layer), () => { sp.layer++; });
+export const deleteCurrentLayer = () => layerChange(() => removeLayer(sp.doc, sp.layer), () => { sp.layer = Math.max(0, sp.layer - 1); });
+export function mergeLayerDown(): void {
+  if (sp.layer < 1) return;
+  layerChange(() => mergeDown(sp.doc, sp.layer), () => { sp.layer--; });
+}
+
+/** Moves a layer to another place in the stack (higher index is on top). */
+export function moveLayerTo(from: number, to: number): void {
+  if (to < 0 || to >= sp.doc.layers.length || from === to) return;
+  pushDoc();
+  moveLayer(sp.doc, from, to);
+  sp.layer = to;
+  emit('structure', 'cursor', 'pixels');
+}
+
+export function toggleLayerVisible(i = sp.layer): void {
+  pushDoc();
+  sp.doc.layers[i].visible = !sp.doc.layers[i].visible;
+  emit('structure', 'pixels');
+}
+
+/**
+ * Adds an image as a new layer above the current one, in the current frame,
+ * at its own pixel size from the top left (cut to the canvas).
+ */
+export async function addImageLayer(file: File): Promise<void> {
+  const img = await decodeFile(file);
+  const { w, h } = sp.doc;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  c.getContext('2d')!.drawImage(img, 0, 0);
+  const px = c.getContext('2d')!.getImageData(0, 0, w, h).data;
+  commitFloating();
+  pushDoc();
+  const at = sp.layer + 1;
+  addLayer(sp.doc, at, file.name.replace(/\.[^.]+$/, '') || undefined);
+  sp.doc.frames[sp.frame].cels[at].px.set(px);
+  sp.layer = at;
+  emit('structure', 'cursor', 'pixels');
+  const cut = img.naturalWidth > w || img.naturalHeight > h ? ` (cut to ${w}×${h})` : '';
+  setStatus(`Added ${file.name} as a new layer${cut}.`);
 }
 
 // ---------- colors ----------

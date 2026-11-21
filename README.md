@@ -50,6 +50,8 @@ A step-by-step flow: **Image → Pixels → Colors → Background & crop → Tou
 
 ## Sprite editor
 
+- **Menus like a desktop app:** File (New, Open, Open from GameMaker, **Open recent**, Import ▸ image as a layer / reference / GameMaker sprite, **Save** into the same file, Save as, Export), Edit, Sprite, Layer, Frame and View, each item with its shortcut. Arrows, Enter and F10 work too.
+- **Tabs:** every file, GameMaker sprite or new sprite opens in its own tab, with its own undo history and view. Switch with Ctrl+Tab / Ctrl+PageDown, close with Ctrl+W or a middle click, drag to reorder; a dot marks unsaved changes. Opening something that is already open goes to its tab, and the open tabs come back next time.
 - **Drawing:** pencil (with a *pixel perfect* mode), eraser, line, rectangle, ellipse, paint bucket (fill an area or replace a color everywhere), eyedropper, and an in-app color picker. Brush sizes, symmetry (left/right, top/bottom) and a **tile mode** that wraps strokes around the edges.
 - **Selections:** rectangle, **lasso** and by color; move, scale and flip them, or **turn them by any angle around a pivot** (a shoulder, a hip) with RotSprite so the lines stay clean; carry the selected piece into the next or previous frame to pose it step by step; cut, copy and paste (also images from other apps). One-click **outline** around the art.
 - **Smart palette:** hue-shifted **ramps** built from any color, a **shading brush** that steps one shade lighter or darker along them, and a **palette lock** that keeps everything you paint inside your palette.
@@ -68,6 +70,10 @@ A step-by-step flow: **Image → Pixels → Colors → Background & crop → Tou
     <td><img src="docs/screenshots/sprite-variants.png" alt="The Variants panel turning the orange lantern blue"></td>
   </tr>
 </table>
+
+<p align="center">
+  <img src="docs/screenshots/sprite-menus.png" alt="The File menu with Import open: image as a new layer, reference image, GameMaker sprite" width="720">
+</p>
 
 <p align="center">
   <img src="docs/screenshots/sprite-export.png" alt="The Export window set to GameMaker, with the preview, origin and collision box" width="720">

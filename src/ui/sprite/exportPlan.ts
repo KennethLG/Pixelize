@@ -9,6 +9,7 @@ import {
 } from '../../export/gamemaker';
 import { canvasBytes } from '../downloads';
 import { setStatus } from '../dom';
+import { closeToast, toast } from '../toast';
 import { exportGif, exportPng, exportRange, exportStrip, framePixels } from './io';
 import { readSprite, writeSprite, type GmProject } from './gmProject';
 import { commitFloating, sp } from './state';
@@ -157,11 +158,19 @@ export async function runExport(o: ExportOptions, gmBase: string, project: GmPro
   if (o.format === 'gif') return exportGif(o.scale, o.tag, v);
   if (!project) throw new Error('Pick the GameMaker project folder first.');
   const done: string[] = [];
-  for (const p of plan(o, gmBase)) {
-    setStatus(`Writing ${p.name}…`);
-    const existing = await readSprite(project, p.name);
-    await writeSprite(project, p.name, await spriteFiles(gmSprite(p, o, project), png, existing));
-    done.push(existing ? `${p.name} (updated)` : p.name);
+  const id = 'gm-send';
+  try {
+    for (const p of plan(o, gmBase)) {
+      setStatus(`Writing ${p.name}…`);
+      toast(`Sending to ${project.name}…`, { kind: 'busy', id, detail: p.name });
+      const existing = await readSprite(project, p.name);
+      await writeSprite(project, p.name, await spriteFiles(gmSprite(p, o, project), png, existing));
+      done.push(existing ? `${p.name} (updated)` : `${p.name} (new)`);
+    }
+  } catch (e) {
+    closeToast(id);
+    throw e;
   }
   setStatus(`Sent to ${project.name}: ${done.join(', ')}. Reopen the project in GameMaker if it was open.`);
+  toast(`Sent to ${project.name}`, { id, kind: 'ok', ms: 6000, detail: `${done.join(', ')}. Reopen the project in GameMaker if it was open.` });
 }

@@ -27,6 +27,10 @@ app.whenReady().then(async () => {
     const P = window.pixelize, $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
     const tick = (ms = 200) => new Promise((r) => setTimeout(r, ms));
     const click = (text, root = document) => [...root.querySelectorAll('button')].find((b) => b.textContent.trim() === text)?.click();
+    const menu = async (top, item) => {
+      [...$$('.mb-top')].find((b) => b.textContent === top)?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await tick(150);
+      [...$$('.mb-item')].find((b) => b.querySelector('.mb-label')?.textContent === item)?.click(); await tick(150);
+    };
     const idle = async () => { for (let i = 0; i < 200 && (P.isBusy() || !P.app.result); i++) await tick(50); await tick(300); };
     ${code}
   })()`);
@@ -88,15 +92,15 @@ app.whenReady().then(async () => {
   await shot('sprite-editor');
 
   await run(`
-    click('Check'); await tick(600);
+    await menu('Sprite', 'Check for problems'); await tick(600);
     const kinds = [...$$('.sp-check .chk-title')];
     kinds.find((t) => /Orphan/.test(t.textContent))?.click(); await tick(300);
   `);
   await shot('sprite-check');
 
   await run(`
-    click('Check'); await tick();
-    click('Variants'); await tick();
+    await menu('Sprite', 'Check for problems'); await tick();
+    await menu('Sprite', 'Color variants'); await tick();
     const vp = $('.sp-variants');
     click('+ New variant', vp); await tick();
     const v = P.spriteState().doc.variants[0];
@@ -116,14 +120,22 @@ app.whenReady().then(async () => {
   await shot('sprite-variants');
 
   await run(`
-    click('Variants'); await tick();
-    click('Export…'); await tick(300);
+    await menu('Sprite', 'Color variants'); await tick();
+    await menu('File', 'Export…'); await tick(300);
     [...$$('.exp-dialog .seg label')].find((l) => l.textContent === 'GameMaker')?.click(); await tick(800);
   `);
   await shot('sprite-export');
 
   await run(`
     click('Cancel', $('.exp-dialog')); await tick();
+    [...$$('.mb-top')].find((b) => b.textContent === 'File')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await tick(200);
+    const imp = [...$$('.mb-item')].find((b) => b.querySelector('.mb-label')?.textContent === 'Import');
+    imp?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true })); imp?.dispatchEvent(new PointerEvent('pointerenter')); await tick(300);
+  `);
+  await shot('sprite-menus');
+
+  await run(`
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await tick();
     $('.opt-open').click(); await tick(400);
   `);
   await shot('options');

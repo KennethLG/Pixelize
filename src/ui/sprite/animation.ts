@@ -3,7 +3,7 @@
 // mirrored copies. Components and shortcuts call these.
 
 import { playbackSequence } from '../../core/frames';
-import { addFrame, addTag, duplicateFrame, mirrorFrames, tagAt, translateBitmap, type Tag } from '../../core/sprite';
+import { addFrame, addTag, duplicateFrame, mirrorFrames, moveFrame, removeFrame, tagAt, translateBitmap, type Tag } from '../../core/sprite';
 import type { Bitmap } from '../../core/bitmap';
 import { shiftPoses, syncParts } from '../../core/parts';
 import { setStatus } from '../dom';
@@ -168,4 +168,26 @@ export function mirrorSelection(): void {
   sp.range = from === to ? null : [from, to];
   emit('structure', 'cursor', 'pixels');
   setStatus(`Added ${to - from + 1} mirrored frame${to > from ? 's' : ''}`);
+}
+
+/** Deletes the current frame (a sprite keeps at least one). */
+export function deleteFrame(): void {
+  commitFloating();
+  if (sp.doc.frames.length < 2) return;
+  pushDoc();
+  if (!removeFrame(sp.doc, sp.frame)) return;
+  sp.frame = Math.min(sp.frame, sp.doc.frames.length - 1);
+  sp.range = null;
+  emit('structure', 'cursor', 'pixels');
+}
+
+/** Moves a frame to another place in the animation. */
+export function moveFrameTo(from: number, to: number): void {
+  if (to < 0 || to >= sp.doc.frames.length || from === to) return;
+  commitFloating();
+  pushDoc();
+  moveFrame(sp.doc, from, to);
+  sp.frame = to;
+  sp.range = null;
+  emit('structure', 'cursor', 'pixels');
 }

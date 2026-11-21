@@ -15,12 +15,13 @@ import { viewCenter } from './canvas';
 import { applyVariant, snapPalette, snapPixels, type Variant } from '../../core/shading';
 import { makeZip, type ZipEntry } from '../../export/zip';
 import { userPalette } from './prefs';
+import { activeIndex, openDoc, restoreTabs, tabList } from './tabs';
 import { cel, commitFloating, emit, floatPiece, on, pushCel, pushDoc, setDoc, setTool, sp } from './state';
 
 const SAVE_KEY = 'pixelize.sprite.doc';
+const TABS_KEY = 'pixelize.sprite.tabs.v1';
 export const MAX_SIDE = 2048;
 
-const isBlank = (d: SpriteDoc) => d.frames.every((f) => f.cels.every((c) => !c.px.some((v, i) => i % 4 === 3 && v)));
 const safeName = (n: string) => n.replace(/\.[^.]+$/, '').replace(/_strip\d+$/i, '').replace(/[^\w.-]+/g, '_') || 'sprite';
 const clampScale = (s: number) => Math.max(1, Math.min(64, Math.round(s) || 1));
 
@@ -56,9 +57,7 @@ function validSize(w: number, h: number): boolean {
 
 export function newSprite(w: number, h: number): void {
   if (!validSize(w, h)) return;
-  commitFloating();
-  if (!isBlank(sp.doc) && !confirm('Start a new sprite? The current one is replaced (save it first if you need it).')) return;
-  setDoc(createDoc(w, h), 'sprite');
+  openDoc(createDoc(w, h), 'sprite');
   setStatus(`New ${w}×${h} sprite`);
 }
 
@@ -89,7 +88,6 @@ function docFromImage(data: Uint8ClampedArray, w: number, h: number, frames: num
 export function loadFrames(canvases: HTMLCanvasElement[], name: string): boolean {
   commitFloating();
   if (!canvases.length) return false;
-  if (!isBlank(sp.doc) && !confirm('Replace the sprite in the editor with this image? Save it first if you need it.')) return false;
   const w = Math.max(...canvases.map((c) => c.width)), h = Math.max(...canvases.map((c) => c.height));
   const doc = createDoc(w, h);
   doc.frames = canvases.map((c) => {
@@ -98,7 +96,7 @@ export function loadFrames(canvases: HTMLCanvasElement[], name: string): boolean
     for (let y = 0; y < c.height; y++) b.px.set(src.subarray(y * c.width * 4, (y + 1) * c.width * 4), y * w * 4);
     return { cels: [b], duration: DEFAULT_DURATION };
   });
-  setDoc(doc, safeName(name));
+  openDoc(doc, safeName(name));
   return true;
 }
 
@@ -107,7 +105,7 @@ export async function openFile(file: File): Promise<void> {
   if (/\.(pixelize|json)$/i.test(file.name)) {
     const doc = parseDoc(await file.text());
     if (!doc) { setStatus("That isn't a Pixelize sprite file.", true); return; }
-    setDoc(doc, safeName(file.name));
+    openDoc(doc, safeName(file.name));
     setStatus(`Opened ${file.name}`);
     return;
   }
@@ -117,7 +115,7 @@ export async function openFile(file: File): Promise<void> {
   // GameMaker strips are named name_stripN.png
   const m = /_strip(\d+)\.[^.]+$/i.exec(file.name);
   const n = m && w % +m[1] === 0 ? +m[1] : 1;
-  setDoc(docFromImage(data, w, h, n), safeName(file.name));
+  openDoc(docFromImage(data, w, h, n), safeName(file.name));
   setStatus(n > 1 ? `Opened ${file.name} as ${n} frames` : `Opened ${file.name}`);
 }
 
@@ -260,22 +258,50 @@ async function onPaste(e: ClipboardEvent): Promise<void> {
   if (clip) pasteBitmap({ ...clip.piece, px: clip.piece.px.slice() }, clip);
 }
 
+/** Edit › Paste: an image on the system clipboard, else what was copied here. */
+export async function pasteFromClipboard(): Promise<void> {
+  try {
+    for (const item of (await navigator.clipboard?.read?.()) ?? []) {
+      const type = item.types.find((t) => t.startsWith('image/'));
+      if (!type) continue;
+      const { data, w, h } = imageToData(await decodeFile(new File([await item.getType(type)], 'clipboard.png', { type })));
+      if (clip && clip.piece.w === w && clip.piece.h === h) { pasteBitmap(clip.piece, clip); return; }
+      if (w > MAX_SIDE || h > MAX_SIDE) { setStatus('The image on the clipboard is too big.', true); return; }
+      pasteBitmap({ w, h, px: data.slice() });
+      return;
+    }
+  } catch { /* no access to the system clipboard: use our own */ }
+  if (clip) pasteBitmap({ ...clip.piece, px: clip.piece.px.slice() }, clip);
+  else setStatus('Nothing to paste.');
+}
+
 // ---------- autosave ----------
 
 let saveTimer = 0;
 function scheduleSave(): void {
   clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ name: sp.name, doc: serializeDoc(sp.doc) })); } catch { /* too big or storage unavailable */ }
+    const list = tabList();
+    const all = { active: activeIndex(), tabs: list.map((t) => ({ name: t.name, gmName: t.gmName, doc: serializeDoc(t.doc) })) };
+    try { localStorage.setItem(TABS_KEY, JSON.stringify(all)); } catch {
+      // too big for the storage: keep at least the open sprite
+      try { localStorage.setItem(TABS_KEY, JSON.stringify({ active: 0, tabs: [all.tabs[all.active]] })); } catch { /* storage unavailable */ }
+    }
   }, 600);
 }
 
-/** Brings back the last sprite. */
+/** Brings back the sprites that were open (or the one sprite older versions saved). */
 export function restore(): void {
   try {
-    const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null') as { name: string; doc: string } | null;
-    const doc = saved && parseDoc(saved.doc);
-    if (doc) setDoc(doc, saved!.name || 'sprite');
+    const saved = JSON.parse(localStorage.getItem(TABS_KEY) || 'null') as { active: number; tabs: { name: string; gmName?: string | null; doc: string }[] } | null;
+    if (saved?.tabs?.length) {
+      const list = saved.tabs.map((t) => ({ name: t.name || 'sprite', gmName: t.gmName ?? null, doc: parseDoc(t.doc) })).filter((t) => t.doc) as { name: string; gmName: string | null; doc: SpriteDoc }[];
+      restoreTabs(list, saved.active);
+      return;
+    }
+    const old = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null') as { name: string; doc: string } | null;
+    const doc = old && parseDoc(old.doc);
+    if (doc) setDoc(doc, old!.name || 'sprite');
   } catch { /* nothing saved */ }
 }
 
@@ -298,5 +324,7 @@ export function initIo(isActive: () => boolean): void {
   }, true);
 
   on('pixels', scheduleSave);
+  on('structure', scheduleSave);
+  on('tabs', scheduleSave);
   on('structure', scheduleSave);
 }

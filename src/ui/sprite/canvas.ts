@@ -57,6 +57,17 @@ function setZoom(z: number, at: [number, number] | null): void {
 }
 
 export const zoomPercent = () => Math.round(view.zoom * 100);
+
+/** Where the view is (zoom and scroll), so each tab comes back to where it was. */
+export interface ViewState { zoom: number; ox: number; oy: number; fitted: string; touched: boolean }
+export const viewState = (): ViewState => ({ zoom: view.zoom, ox: view.ox, oy: view.oy, fitted, touched: viewTouched });
+export function restoreView(v: ViewState | null): void {
+  if (v) { view.zoom = v.zoom; view.ox = v.ox; view.oy = v.oy; fitted = v.fitted; viewTouched = v.touched; }
+  // a document without a view yet is fitted on the next draw
+  else { fitted = ''; viewTouched = false; }
+  emit('view');
+  draw();
+}
 /** "x, y  #rrggbb" for the pixel under the pointer, or the canvas size. */
 export const hoverText = () => hoverInfo || `${sp.doc.w}×${sp.doc.h}`;
 
