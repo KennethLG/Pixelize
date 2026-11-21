@@ -10,6 +10,8 @@ import { LayersPanel } from './LayersPanel';
 import { Palettes } from './Palettes';
 import { PreviewWindow } from './PreviewWindow';
 import { CheckPanel } from './CheckPanel';
+import { ExportDialog } from './ExportDialog';
+import { GmOpenDialog } from './GmOpenDialog';
 import { VariantsPanel } from './VariantsPanel';
 import { Timeline } from './Timeline';
 import { ToolBar } from './ToolBar';
@@ -17,7 +19,7 @@ import { ToolOptions } from './ToolOptions';
 import { TopBar } from './TopBar';
 
 export function SpriteEditor() {
-  useSp('paper');
+  useSp('paper', 'view');
   // the paper also shows behind the thumbnails and the preview (styles.css)
   return (
     <div className={sp.paperMode === 'color' ? 'sp-root paper-solid' : 'sp-root'} style={{ '--paper': hex(sp.paperColor) } as CSSProperties}>
@@ -38,6 +40,8 @@ export function SpriteEditor() {
       <PreviewWindow />
       <CheckPanel />
       <VariantsPanel />
+      {sp.exportOpen && <ExportDialog />}
+      {sp.gmOpen && <GmOpenDialog />}
     </div>
   );
 }

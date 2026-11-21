@@ -86,6 +86,11 @@ export const sp = {
   /** the Variants panel, and the variant shown on the canvas (only on screen) */
   variantsOpen: false,
   showVariant: null as number | null,
+  /** the Export window, and the Open from GameMaker window */
+  exportOpen: false,
+  gmOpen: false,
+  /** the GameMaker sprite this document was opened from (Export sends it back there) */
+  gmName: null as string | null,
   /** the floating preview window */
   previewOpen: false,
   previewScale: 2,
@@ -267,6 +272,7 @@ export function setDoc(doc: SpriteDoc, name = sp.name): void {
   sp.preview = null;
   sp.pivotAt = null;
   sp.name = name;
+  sp.gmName = null;
   resetHistory();
   emit('structure', 'cursor', 'pixels', 'selection');
 }

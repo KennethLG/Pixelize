@@ -39,6 +39,8 @@ export const ACTIONS: KeyAction[] = [
   A('sprite', 'Drawing', 'swapColors', 'Swap primary and secondary', ['X']),
   A('sprite', 'Drawing', 'brushDown', 'Smaller brush', ['[']),
   A('sprite', 'Drawing', 'brushUp', 'Bigger brush', [']']),
+  A('sprite', 'Edit', 'export', 'Export…', ['Ctrl+Shift+E']),
+  A('sprite', 'Edit', 'openGm', 'Open a GameMaker sprite…', ['Ctrl+Shift+O']),
   A('sprite', 'Edit', 'undo', 'Undo', ['Ctrl+Z']),
   A('sprite', 'Edit', 'redo', 'Redo', ['Ctrl+Y', 'Ctrl+Shift+Z']),
   A('sprite', 'Edit', 'copy', 'Copy', ['Ctrl+C']),

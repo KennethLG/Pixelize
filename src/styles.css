@@ -545,3 +545,54 @@ body[data-mode="sprite"] .wrap { max-width: 1800px; }
 .ramp { display: flex; gap: 3px; align-items: center; }
 .ramp .sp-sw { width: 22px; flex: none; }
 .ramp.saved .small { padding: 1px 6px; }
+
+/* Export window */
+.exp-dialog { width: min(980px, 100%); }
+.exp-body { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; padding: 14px 16px; overflow-y: auto; }
+.exp-preview, .exp-options { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.exp-stage { display: flex; flex-direction: column; gap: 6px; }
+.exp-canvas { display: grid; place-items: center; min-height: 220px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); overflow: auto; }
+.exp-canvas canvas { display: block; max-width: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+.exp-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+.exp-row > span:first-child { min-width: 84px; }
+.exp-row input[type="text"] { flex: 1; min-width: 140px; }
+.exp-row select { flex: 1; min-width: 0; }
+.exp-play input[type="range"] { flex: 1; min-width: 80px; }
+.exp-play .exp-legend { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; }
+.exp-key { display: inline-block; width: 12px; height: 0; border-top: 2px solid; margin-left: 6px; }
+.exp-key.origin { border-color: #ff4d6d; }
+.exp-key.box { border-top: 1px dashed rgba(80, 200, 255, 0.9); }
+.exp-summary { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.exp-picks { display: flex; flex-wrap: wrap; gap: 4px; }
+.exp-picks .on { background: var(--accent-soft); color: var(--accent); }
+.exp-layers ol { margin: 4px 0 0; padding-left: 22px; font-size: 13.5px; }
+.exp-layers small { color: var(--muted); }
+.exp-project { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.exp-notes { display: flex; flex-direction: column; gap: 4px; }
+.hint.bad { color: var(--bad); }
+.exp-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); }
+@media (max-width: 760px) { .exp-body { grid-template-columns: 1fr; } }
+
+/* Open from GameMaker */
+.gmo-dialog { width: min(1080px, 100%); height: min(86vh, 900px); }
+.gmo-body { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; min-height: 0; flex: 1; }
+.gmo-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.gmo-filters input[type="search"] { flex: 2; min-width: 180px; }
+.gmo-filters select { flex: 1; min-width: 140px; max-width: 320px; }
+.gmo-count { margin-left: auto; }
+.gmo-progress { display: flex; align-items: center; gap: 8px; }
+.gmo-progress progress { flex: 1; accent-color: var(--accent); height: 6px; }
+.gmo-grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; align-content: start; padding: 2px; }
+.gmo-card { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: inherit; text-align: left; font: inherit; cursor: pointer; min-width: 0; }
+.gmo-card:hover { border-color: var(--accent); }
+.gmo-card.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.gmo-card.bad { opacity: .55; }
+.gmo-thumb { height: 96px; display: grid; place-items: center; border-radius: 4px; background-color: var(--check-b); background-image: conic-gradient(var(--check-a) 25%, transparent 0 50%, var(--check-a) 0 75%, transparent 0); background-size: 12px 12px; overflow: hidden; }
+.gmo-thumb img { max-width: 100%; max-height: 100%; min-width: 32px; min-height: 32px; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; }
+.gmo-thumb i.loading { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: gmo-spin 0.9s linear infinite; }
+@keyframes gmo-spin { to { transform: rotate(360deg); } }
+.gmo-name { font-size: 12.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gmo-card small { font-size: 11px; }
+.gmo-foot { align-items: center; }
+.gmo-sel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .gmo-thumb i.loading { animation: none; } }

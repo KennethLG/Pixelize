@@ -117,6 +117,13 @@ app.whenReady().then(async () => {
 
   await run(`
     click('Variants'); await tick();
+    click('Export…'); await tick(300);
+    [...$$('.exp-dialog .seg label')].find((l) => l.textContent === 'GameMaker')?.click(); await tick(800);
+  `);
+  await shot('sprite-export');
+
+  await run(`
+    click('Cancel', $('.exp-dialog')); await tick();
     $('.opt-open').click(); await tick(400);
   `);
   await shot('options');

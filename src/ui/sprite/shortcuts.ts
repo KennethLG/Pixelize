@@ -23,6 +23,8 @@ const RUN: Record<string, () => void> = {
   brushUp: () => setBrush(sp.brush + 1),
   undo, redo, copy, cut, selectAll, deselect,
   delete: deleteSelection,
+  export: () => { sp.exportOpen = true; emit('view'); },
+  openGm: () => { sp.gmOpen = true; emit('view'); },
   toLayer: () => selectionToLayer(false),
   copyToLayer: () => selectionToLayer(true),
   apply: () => { if (sp.floating) commitFloating(); },
@@ -47,6 +49,8 @@ const RUN: Record<string, () => void> = {
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
 function onKeyDown(e: KeyboardEvent): void {
+  // the Export window takes the keyboard while it is open
+  if (sp.exportOpen || sp.gmOpen) return;
   const t = e.target as HTMLElement;
   if (t.matches?.('input[type="text"], input[type="number"], textarea')) return;
   const d = ARROWS[e.key];

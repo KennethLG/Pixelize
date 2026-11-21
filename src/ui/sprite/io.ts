@@ -24,8 +24,10 @@ const isBlank = (d: SpriteDoc) => d.frames.every((f) => f.cels.every((c) => !c.p
 const safeName = (n: string) => n.replace(/\.[^.]+$/, '').replace(/_strip\d+$/i, '').replace(/[^\w.-]+/g, '_') || 'sprite';
 const clampScale = (s: number) => Math.max(1, Math.min(64, Math.round(s) || 1));
 
+const variantPart = (v: Variant | null) => (v ? `_${v.name.replace(/[^\w.-]+/g, '_')}` : '');
+
 /** A frame as it exports (reference layers left out), with a variant's swaps when given. */
-const framePixels = (fi: number, variant?: Variant | null) => {
+export const framePixels = (fi: number, variant?: Variant | null) => {
   const px = composite(sp.doc, fi, null, { refs: false });
   return variant ? applyVariant(px, variant) : px;
 };
@@ -121,22 +123,22 @@ export async function openFile(file: File): Promise<void> {
 
 // ---------- export ----------
 
-export async function exportPng(scale: number): Promise<void> {
+export async function exportPng(scale: number, variant: Variant | null = null): Promise<void> {
   commitFloating();
   const s = clampScale(scale);
   const suffix = sp.doc.frames.length > 1 ? `_${sp.frame + 1}` : '';
-  await saveBlob(await canvasBlob(frameCanvas(sp.frame, s)), `${sp.name}${suffix}${s > 1 ? `_x${s}` : ''}.png`);
+  await saveBlob(await canvasBlob(frameCanvas(sp.frame, s, variant)), `${sp.name}${variantPart(variant)}${suffix}${s > 1 ? `_x${s}` : ''}.png`);
 }
 
 /** The frames an export covers: one tag (by index) or all of them, and the file name part. */
-function exportRange(tag: number | null): { frames: number[]; name: string; dir: 'forward' | 'reverse' | 'pingpong' } {
+export function exportRange(tag: number | null): { frames: number[]; name: string; dir: 'forward' | 'reverse' | 'pingpong' } {
   const t = tag === null ? null : sp.doc.tags[tag];
   const all = sp.doc.frames.map((_, i) => i);
   if (!t) return { frames: all, name: sp.name, dir: 'forward' };
   return { frames: all.slice(t.from, t.to + 1), name: `${sp.name}_${t.name.replace(/[^\w.-]+/g, '_')}`, dir: t.dir };
 }
 
-export async function exportStrip(scale: number, tag: number | null = null): Promise<void> {
+export async function exportStrip(scale: number, tag: number | null = null, variant: Variant | null = null): Promise<void> {
   commitFloating();
   const { frames, name } = exportRange(tag);
   const s = clampScale(scale), n = frames.length;
@@ -144,20 +146,20 @@ export async function exportStrip(scale: number, tag: number | null = null): Pro
   c.width = sp.doc.w * s * n;
   c.height = sp.doc.h * s;
   const ctx = c.getContext('2d')!;
-  frames.forEach((fi, k) => ctx.drawImage(frameCanvas(fi, s), k * sp.doc.w * s, 0));
-  await saveBlob(await canvasBlob(c), `${name}_strip${n}.png`);
+  frames.forEach((fi, k) => ctx.drawImage(frameCanvas(fi, s, variant), k * sp.doc.w * s, 0));
+  await saveBlob(await canvasBlob(c), `${name}${variantPart(variant)}_strip${n}.png`);
 }
 
-export async function exportGif(scale: number, tag: number | null = null): Promise<void> {
+export async function exportGif(scale: number, tag: number | null = null, variant: Variant | null = null): Promise<void> {
   commitFloating();
   setStatus('Encoding GIF…');
   await wait(20);
   // a tag plays in its own direction (a ping-pong tag goes there and back)
   const { frames: range, name, dir } = exportRange(tag);
   const seq = playbackSequence(range, dir, false);
-  const frames = seq.map((i) => composite(sp.doc, i, null, { refs: false }));
+  const frames = seq.map((i) => framePixels(i, variant));
   const bytes = encodeGif(frames, sp.doc.w, sp.doc.h, clampScale(scale), seq.map((i) => sp.doc.frames[i].duration / 10), true);
-  await saveBlob(new Blob([bytes], { type: 'image/gif' }), `${name}.gif`);
+  await saveBlob(new Blob([bytes], { type: 'image/gif' }), `${name}${variantPart(variant)}.gif`);
 }
 
 /** The original and every variant, as strips, GIFs or the current frame, in one ZIP. */
