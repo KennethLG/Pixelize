@@ -3,7 +3,7 @@
 
 import { carryFloating, commitFloating, deselect, sp } from '../state';
 import {
-  bakeLayerPart, deleteSelection, freePose, makeLayerPart, outlineArt, removeOutlineArt, resetPivot, restPose, setAngle, setBrush, setLayerParent, setOption, transform,
+  bakeLayerPart, deleteSelection, freePose, makeLayerPart, outlineArt, removeOutlineArt, resetPivot, restPose, selectionToLayer, setAngle, setBrush, setLayerParent, setOption, transform,
 } from '../actions';
 import { parentChoices, partOf, poseOf } from '../../../core/parts';
 import { selectAll, selectionBox } from '../canvas';
@@ -50,6 +50,7 @@ function SelectionActions() {
       {sp.floating?.pivot && btn('Center pivot', 'Put the turning point back in the middle', resetPivot)}
       {btn('◀ Frame', 'Copy the selection into the previous frame, keeping its place and turn.\nShift+click: move it there instead.', (e) => carryFloating(sp.frame - 1, !e.shiftKey))}
       {btn('Frame ▶', 'Copy the selection into the next frame, keeping its place and turn.\nShift+click: move it there instead.', (e) => carryFloating(sp.frame + 1, !e.shiftKey))}
+      {btn('To layer', `Move the selection to a new layer above, in the same place (${keyLabel('sprite.toLayer')}).\nShift+click: copy it there instead (${keyLabel('sprite.copyToLayer')}).`, (e) => selectionToLayer(e.shiftKey))}
       {btn('Copy', 'Copy (Ctrl+C)', copy)}
       {btn('Cut', 'Cut (Ctrl+X)', cut)}
       {btn('Delete', 'Delete', deleteSelection)}
