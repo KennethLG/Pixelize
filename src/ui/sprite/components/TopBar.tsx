@@ -3,7 +3,8 @@
 import { useRef, useState } from 'react';
 import { setStatus } from '../../dom';
 import { useSp } from '../hooks';
-import { MAX_SIDE, exportGif, exportPng, exportStrip, newSprite, openFile, resizeSprite, saveProject } from '../io';
+import { MAX_SIDE, newSprite, openFile, resizeSprite, saveProject } from '../io';
+import { keyLabel } from '../../keys';
 import { canRedo, canUndo, emit, redo, sp, undo } from '../state';
 import { NumberField } from '../../components/common';
 
@@ -17,10 +18,6 @@ export function TopBar() {
   const [h, setH] = useState(sp.doc.h);
   const [shown, setShown] = useState(`${sp.doc.w}x${sp.doc.h}`);
   if (shown !== `${sp.doc.w}x${sp.doc.h}`) { setShown(`${sp.doc.w}x${sp.doc.h}`); setW(sp.doc.w); setH(sp.doc.h); }
-  const [scale, setScale] = useState(1);
-  // what Strip and GIF export: everything, or one tag
-  const [what, setWhat] = useState('all');
-  const tag = what === 'all' || !sp.doc.tags[Number(what)] ? null : Number(what);
 
   return (
     <div className="sp-bar panel">
@@ -33,6 +30,7 @@ export function TopBar() {
           hidden
           onChange={(e) => { const f = e.target.files?.[0]; if (f) report(openFile(f)); e.target.value = ''; }}
         />
+        <button type="button" className="ghost small" title={`Open a sprite of a GameMaker project, with its layers (${keyLabel('sprite.openGm')})`} onClick={() => { sp.gmOpen = true; emit('view'); }}>From GameMaker…</button>
         <button type="button" className="ghost small" title="Save layers and frames as a .pixelize file" onClick={() => report(saveProject())}>Save project</button>
       </div>
       <div className="group">
@@ -53,18 +51,7 @@ export function TopBar() {
           onClick={() => { sp.variantsOpen = !sp.variantsOpen; if (!sp.variantsOpen) sp.showVariant = null; emit('view'); }}>Variants</button>
       </div>
       <div className="group sp-export">
-        <span className="muted">Export</span>
-        <NumberField value={scale} min={1} max={64} label="Export scale" title="Scale" onCommit={setScale} live />
-        <span className="muted">×</span>
-        <button type="button" className="small" title="The current frame" onClick={() => report(exportPng(scale))}>PNG</button>
-        {sp.doc.tags.length > 0 && (
-          <select aria-label="Frames to export" title="Strip and GIF export all frames or one tag" value={tag === null ? 'all' : String(tag)} onChange={(e) => setWhat(e.target.value)}>
-            <option value="all">All frames</option>
-            {sp.doc.tags.map((t, i) => <option key={i} value={String(i)}>{t.name}</option>)}
-          </select>
-        )}
-        <button type="button" className="small" title="The frames side by side, named _stripN.png for GameMaker" onClick={() => report(exportStrip(scale, tag))}>Strip</button>
-        <button type="button" className="small" onClick={() => report(exportGif(scale, tag))}>GIF</button>
+        <button type="button" className="small" title={`PNG, strip, GIF or straight into a GameMaker project, with a preview (${keyLabel('sprite.export')})`} onClick={() => { sp.exportOpen = true; emit('view'); }}>Export…</button>
       </div>
       <p className="status" id="spStatus" role="status" />
     </div>

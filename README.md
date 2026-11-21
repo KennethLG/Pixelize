@@ -58,6 +58,9 @@ A step-by-step flow: **Image → Pixels → Colors → Background & crop → Tou
 - **Check:** finds orphan pixels, jaggies, banding and colors that are almost the same, and takes you to each one.
 - **Variants:** color swaps of the whole sprite (red team, blue team, elite) exported all at once.
 - **Layers** with opacity and **reference images** that are never exported, a resizable canvas, and `.pixelize` project files.
+- **Export window** with a live preview of exactly what gets written: PNG, `_stripN.png` strip or GIF, at any scale, all frames or one tag, in the original colors or a variant.
+- **Straight into GameMaker:** pick your project folder once and *Send to GameMaker* writes the sprite asset with **its layers** (names, visibility, opacity), frames, speed, origin and collision box, and adds it to the `.yyp`. One sprite per tag if you like. Sending again updates the sprite and keeps its origin, collision mask, texture group and folder. Close the project in GameMaker first. Needs the desktop app, Chrome or Edge (they can write to a folder).
+- **Open from GameMaker:** browse every sprite of the project as pictures, search by name or folder, filter by asset folder, and open one **with its layers**, frames and speed. Export then sends it back to the same sprite. The listing is cached, so after the first time a big project opens at once and only changed sprites are read again.
 
 <table>
   <tr>
@@ -65,6 +68,10 @@ A step-by-step flow: **Image → Pixels → Colors → Background & crop → Tou
     <td><img src="docs/screenshots/sprite-variants.png" alt="The Variants panel turning the orange lantern blue"></td>
   </tr>
 </table>
+
+<p align="center">
+  <img src="docs/screenshots/sprite-export.png" alt="The Export window set to GameMaker, with the preview, origin and collision box" width="720">
+</p>
 
 Every keyboard shortcut can be changed in **Options** (⚙ in the header), which also switches between the light and dark themes.
 
