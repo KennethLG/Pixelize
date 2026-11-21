@@ -1,8 +1,10 @@
 // Editor actions shared by the components and the keyboard shortcuts.
 
-import { flip, newBitmap, outline, rotate90, scaleNearest } from '../../core/bitmap';
+import {
+  blit, clearMasked, extract, flip, floatingMask, newBitmap, outline, rotate90, scaleNearest, type Bitmap,
+} from '../../core/bitmap';
 import type { RGBA } from '../../core/color';
-import { addLayer } from '../../core/sprite';
+import { addLayer, cloneDoc } from '../../core/sprite';
 import { bakePart, freeFrame, makePart, REST, setParent, setPose, syncParts } from '../../core/parts';
 import { placeFloating } from '../../core/rotsprite';
 import { removeOutline } from '../../core/unoutline';
@@ -101,6 +103,51 @@ export function resetPivot(): void {
   delete f.pivot;
   sp.pivotAt = null;
   emit('pixels', 'selection');
+}
+
+/**
+ * Moves the selected pixels (or the floating piece) of the current frame to a
+ * new layer right above their layer, in the same place. `copy` leaves the
+ * original layer as it was. The new layer becomes the current one, with its
+ * pixels still selected. One undo step.
+ */
+export function selectionToLayer(copy = false): void {
+  const f = sp.floating;
+  if (!f && !sp.mask) { setStatus('Select something first: the selected pixels go to a new layer.'); return; }
+  // take in paint on posed parts before the cut changes their cels
+  syncParts(sp.doc);
+  const prev = cloneDoc(sp.doc);
+  const from = f ? f.layer : sp.layer, frame = f ? f.frame : sp.frame;
+  const src = cel(frame, from);
+  let placed: { piece: Bitmap; x: number; y: number };
+  if (f) {
+    sp.floating = null;
+    // undo goes back to before the piece was lifted
+    prev.frames[frame].cels[from].px.set(f.before);
+    placed = placeFloating(f);
+    if (copy) src.px.set(f.before);
+  } else {
+    const got = extract(src, sp.mask);
+    if (!got) return;
+    placed = { piece: got.piece, x: got.box.x, y: got.box.y };
+    if (!copy) clearMasked(src, sp.mask);
+  }
+  if (!placed.piece.px.some((v, i) => i % 4 === 3 && v > 0)) {
+    if (f) cel(frame, from).px.set(prev.frames[frame].cels[from].px);
+    setStatus('The selection is empty on this layer: nothing to move.');
+    emit('pixels', 'selection');
+    return;
+  }
+  pushDoc(prev);
+  const at = from + 1;
+  addLayer(sp.doc, at, `${sp.doc.layers[from].name} piece`);
+  blit(sp.doc.frames[frame].cels[at], placed.piece, placed.x, placed.y);
+  syncParts(sp.doc);
+  sp.frame = frame;
+  sp.layer = at;
+  sp.mask = floatingMask(sp.doc.w, sp.doc.h, placed);
+  emit('structure', 'cursor', 'pixels', 'selection');
+  setStatus(copy ? 'Copied the selection to a new layer.' : 'Moved the selection to a new layer.');
 }
 
 export function deleteSelection(): void {

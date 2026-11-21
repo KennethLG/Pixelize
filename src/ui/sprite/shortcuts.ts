@@ -3,7 +3,7 @@
 // selection (or, with the Move tool, the layer), and with Alt the whole frame.
 
 import { actionFor, releases } from '../keys';
-import { deleteSelection, setAngle, setBrush, swapColors } from './actions';
+import { deleteSelection, selectionToLayer, setAngle, setBrush, swapColors } from './actions';
 import { copyCel, endPeek, newFrame, pasteCel, shiftFrame, startPeek, togglePlay } from './animation';
 import { fitView, nudge, selectAll, setSpaceHeld, zoomStep } from './canvas';
 import { copy, cut } from './io';
@@ -23,6 +23,8 @@ const RUN: Record<string, () => void> = {
   brushUp: () => setBrush(sp.brush + 1),
   undo, redo, copy, cut, selectAll, deselect,
   delete: deleteSelection,
+  toLayer: () => selectionToLayer(false),
+  copyToLayer: () => selectionToLayer(true),
   apply: () => { if (sp.floating) commitFloating(); },
   turnLeft: () => turnBy(-15),
   turnRight: () => turnBy(15),

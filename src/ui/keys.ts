@@ -47,6 +47,8 @@ export const ACTIONS: KeyAction[] = [
   A('sprite', 'Edit', 'deselect', 'Deselect', ['Ctrl+D', 'Escape']),
   A('sprite', 'Edit', 'delete', 'Delete the selection', ['Delete', 'Backspace']),
   A('sprite', 'Edit', 'apply', 'Put moved pixels down', ['Enter']),
+  A('sprite', 'Edit', 'toLayer', 'Move the selection to a new layer', ['Ctrl+Shift+J']),
+  A('sprite', 'Edit', 'copyToLayer', 'Copy the selection to a new layer', ['Ctrl+J']),
   A('sprite', 'Edit', 'turnLeft', 'Turn the selection 15° left', ['Shift+R']),
   A('sprite', 'Edit', 'turnRight', 'Turn the selection 15° right', ['R']),
   A('sprite', 'View', 'zoomIn', 'Zoom in', ['+', '=']),
