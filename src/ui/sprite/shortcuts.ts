@@ -7,7 +7,7 @@ import { deleteSelection, setAngle, setBrush, swapColors } from './actions';
 import { copyCel, endPeek, newFrame, pasteCel, shiftFrame, startPeek, togglePlay } from './animation';
 import { fitView, nudge, selectAll, setSpaceHeld, zoomStep } from './canvas';
 import { copy, cut } from './io';
-import { carryFloating, commitFloating, deselect, emit, redo, setFrame, setTool, sp, undo, type Tool } from './state';
+import { carryFloating, commitFloating, deselect, emit, pickOnce, redo, setFrame, setTool, sp, undo, type Tool } from './state';
 
 const TOOLS: Tool[] = ['pencil', 'eraser', 'line', 'shade', 'bucket', 'rect', 'ellipse', 'picker', 'select', 'lasso', 'wand', 'move', 'pose', 'canvas', 'pan'];
 
@@ -69,6 +69,7 @@ function onKeyDown(e: KeyboardEvent): void {
   }
   if (name === 'peek') { e.preventDefault(); if (!e.repeat) startPeek(); return; }
   e.preventDefault();
+  if (name === 'picker') { pickOnce(); return; }
   if ((TOOLS as string[]).includes(name)) { setTool(name as Tool); return; }
   if (e.repeat && (name === 'play' || name === 'newFrame' || name === 'dupFrame')) return;
   RUN[name]?.();

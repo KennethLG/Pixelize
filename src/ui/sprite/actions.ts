@@ -5,6 +5,7 @@ import type { RGBA } from '../../core/color';
 import { addLayer } from '../../core/sprite';
 import { bakePart, freeFrame, makePart, REST, setParent, setPose, syncParts } from '../../core/parts';
 import { placeFloating } from '../../core/rotsprite';
+import { removeOutline } from '../../core/unoutline';
 import { setStatus } from '../dom';
 import { decodeFile } from '../input';
 import { cel, commitFloating, emit, lift, pushCel, pushDoc, setColor, sp, type Float } from './state';
@@ -128,6 +129,23 @@ export function outlineArt(corners: boolean): void {
   if (!n) { setStatus('Nothing to outline on this layer.'); return; }
   pushCel(sp.frame, sp.layer, before);
   emit('pixels');
+}
+
+/**
+ * Removes the outline of the art on the current layer (only in the selection
+ * when there is one): the silhouette and the lines between parts go, lines
+ * inside one part (eyes, mouths) stay. `shrink` drops the silhouette outline
+ * instead of filling it with the colors next to it.
+ */
+export function removeOutlineArt(shrink: boolean): void {
+  commitFloating();
+  const c = cel(), before = c.px.slice();
+  const a = removeOutline(c, { mask: sp.mask, shrink });
+  if (!a.edge && !a.contour) { setStatus('No outline found on this layer: its edge is not darker than the inside.'); return; }
+  pushCel(sp.frame, sp.layer, before);
+  emit('pixels');
+  const kept = a.detail ? ` Kept ${a.detail} px of lines inside one part (eyes, details).` : '';
+  setStatus(`Removed the outline: ${a.edge} px on the edge, ${a.contour} px between parts.${kept}`);
 }
 
 /**

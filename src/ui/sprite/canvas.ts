@@ -14,7 +14,7 @@ import { applyVariant, nearestColor, shadeColor, snapPalette, type SnapPalette }
 import { shadeRamps, userPalette } from './prefs';
 import { cloneDoc, composite, cropCanvas, scaleDoc, type SpriteDoc } from '../../core/sprite';
 import { cssVar, setStatus as setStatusText } from '../dom';
-import { cel, commitFloating, deselect, emit, lift, liveCel, on, pushCel, pushDoc, setColor, setLayer, sp, type Tool } from './state';
+import { cel, commitFloating, deselect, emit, endPick, lift, liveCel, on, pushCel, pushDoc, setColor, setLayer, sp, type Tool } from './state';
 
 type Pt = { x: number; y: number };
 
@@ -681,7 +681,7 @@ function onPointerDown(e: PointerEvent): void {
     return;
   }
 
-  if (tool === 'picker') { pickColor(p, e.button === 2 ? 'secondary' : 'primary'); return; }
+  if (tool === 'picker') { pickColor(p, e.button === 2 ? 'secondary' : 'primary'); if (sp.tool === 'picker') endPick(); return; }
   if (tool === 'pose') { startPose(e, p); return; }
 
   if (tool === 'pencil' || tool === 'eraser') {

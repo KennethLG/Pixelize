@@ -289,11 +289,27 @@ export function setLayer(i: number): void {
   emit('cursor');
 }
 
+/** the tool to go back to after one pick, when the eyedropper came from its shortcut */
+let pickReturn: Tool | null = null;
+
 export function setTool(t: Tool): void {
+  pickReturn = null;
   if (!['select', 'lasso', 'wand', 'move', 'pan'].includes(t)) commitFloating();
   if (t === 'canvas') deselect();
   sp.tool = t;
   emit('tool');
+}
+
+/** Switches to the eyedropper for one pick, then back to the current tool (see endPick). */
+export function pickOnce(): void {
+  const prev = sp.tool;
+  setTool('picker');
+  if (prev !== 'picker') pickReturn = prev;
+}
+
+/** After a pick: goes back to the tool that was in use before pickOnce. */
+export function endPick(): void {
+  if (pickReturn) setTool(pickReturn);
 }
 
 export function setColor(slot: 'primary' | 'secondary', c: RGBA): void {
